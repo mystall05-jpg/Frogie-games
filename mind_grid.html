@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>MIND GRID</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #0d0d2b;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        #game-container {
+            width: 100%;
+            max-width: 600px;
+            aspect-ratio: 3/4;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
+    <script>
+        const COLORS = {
+            bg: 0x0d0d2b,
+            tileInactive: 0x1a1a5e,
+            tileActive: 0xffd700,
+            tileBorder: 0x3333aa,
+            text: 0xffd700,
+            lives: 0xff4444
+        };
+
+        class GameScene extends Phaser.Scene {
+            constructor() {
+                super('GameScene');
+            }
+
+            create() {
+                this.cameras.main.setBackgroundColor(COLORS.bg);
+
+                const W = this.cameras.main.width;
+                const H = this.cameras.main.height;
+
+                // Title
+                this.add.text(W / 2, 40, 'MIND GRID', {
+                    fontFamily: 'Arial, Helvetica, sans-serif',
+                    fontSize: '36px',
+                    color: '#ffd700',
+                    fontStyle: 'bold'
+                }).setOrigin(0.5);
+
+                // UI texts
+                this.scoreText = this.add.text(20, 20, 'Score: 0', {
+                    fontFamily: 'Arial',
+                    fontSize: '20px',
+                    color: '#ffd700'
+                });
+                this.livesText = this.add.text(W - 20, 20, 'Lives: 3', {
+                    fontFamily: 'Arial',
+                    fontSize: '20px',
+                    color: '#ff4444'
+                }).setOrigin(1, 0);
+                this.roundText = this.add.text(20, 50, 'Round: 1', {
+                    fontFamily: 'Arial',
+                    fontSize: '18px',
+                    color: '#ffd700'
+                });
+                this.statusText = this.add.text(W / 2, H - 40, 'Watch the sequence...', {
+                    fontFamily: 'Arial',
+                    fontSize: '16px',
+                    color: '#ffffff'
+                }).setOrigin(0.5);
+
+                // Grid layout
+                const tileSize = 120;
+                const gap = 20;
+                const gridWidth = 3 * tileSize + 2 * gap;
+                const gridHeight = 3 * tileSize + 2 * gap;
+                const startX = (W - gridWidth) / 2;
+                const startY = (H - gridHeight) / 2 - 30;
+
+                this.tiles = [];
+                this.tileGraphics = [];
+
+                for (let row = 0; row < 3; row++) {
+                    for (let col = 0; col < 3; col++) {
+                        const idx = row * 3 + col;
+                        const x = startX + col * (tileSize + gap) + tileSize / 2;
+                        const y = startY + row * (tileSize + gap) + tileSize / 2;
+
+                        const g = this.add.graphics();
+                        this.drawTile(g, x, y, tileSize, COLORS.tileInactive);
+                        g.setInteractive(new Phaser.Geom.Rectangle(-tileSize / 2, -tileSize / 2, tileSize, tileSize), Phaser.Geom.Rectangle.Contains);
+                        g.on('pointerdown', () => this.playerSelect(idx));
+
+                        this.tileGraphics.push(g);
+                        this.tiles.push({
+                            x: x,
+                            y: y,
+                            size: tileSize,
+                            g: g,
+                            idx: idx
+                        });
+                    }
+                }
+
+                // Game state
+                this.sequence = [];
+                this.playerInput = [];
+                this.isPlaying = false;
+                this.isPlayerTurn = false;
+                this.score = 0;
+                this.lives = 3;
+                this.round = 1;
+                this.currentStep = 0;
+
+                // start
+                this.addToSequence();
+            }
+
+            drawTile(g, x, y, size, color) {
+                g.clear();
+                g.fillStyle(color, 1);
+                g.fillRoundedRect(x - size / 2, y - size / 2, size, size, 16);
+                g.lineStyle(2, COLORS.tileBorder, 0.8);
+                g.strokeRoundedRect(x - size / 2, y - size / 2, size, size, 16);
+
+                // inner glow effect (subtle)
+                g.fillStyle(0xffffff, 0.05);
+                g.fillRoundedRect(x - size / 2 + 8, y - size / 2 + 8, size - 16, size - 16, 12);
+            }
+
+            lightTile(idx, active) {
+                const tile = this.tiles[idx];
+                const color = active ? COLORS.tileActive : COLORS.tileInactive;
+                this.drawTile(tile.g, tile.x, tile.y, tile.size, color);
+                if (active) {
+                    // add a brief pulse
+                    this.tweens.add({
+                        targets: tile.g,
+                        scaleX: 1.08,
+                        scaleY: 1.08,
+                        duration: 100,
+                        yoyo: true,
+                        ease: 'Quad.easeOut'
+                    });
+                }
+            }
+
+            addToSequence() {
+                const randomIdx = Phaser.Math.Between(0, 8);
+                this.sequence.push(randomIdx);
+                this.playerInput = [];
+                this.currentStep = 0;
+                this.isPlaying = true;
+                this.isPlayerTurn = false;
+                this.statusText.setText('Watch the sequence...');
+                this.playSequence();
+            }
+
+            playSequence() {
+                let index = 0;
+                const seq = this.sequence;
+
+                const lightNext = () => {
+                    if (index >= seq.length) {
+                        this.isPlaying = false;
+                        this.isPlayerTurn = true;
+                        this.playerInput = [];
+                        this.currentStep = 0;
+                        this.statusText.setText('Your turn!');
+                        return;
+                    }
+
+                    const idx = seq[index];
+                    this.lightTile(idx, true);
+                    this.time.delayedCall(500, () => {
+                        this.lightTile(idx, false);
+                        index++;
+                        this.time.delayedCall(200, lightNext);
+                    });
+                };
+
+                this.time.delayedCall(300, lightNext);
+            }
+
+            playerSelect(idx) {
+                if (!this.isPlayerTurn || this.isPlaying) return;
+
+                // Provide haptic feedback (vibrate if available)
+                if (navigator.vibrate) navigator.vibrate(20);
+
+                this.lightTile(idx, true);
+                this.time.delayedCall(300, () => {
+                    this.lightTile(idx, false);
+                });
+
+                // Compare
+                const expected = this.sequence[this.currentStep];
+                if (idx === expected) {
+                    this.playerInput.push(idx);
+                    this.currentStep++;
+
+                    // Check if player completed sequence
+                    if (this.currentStep === this.sequence.length) {
+                        // Correct round
+                        this.isPlayerTurn = false;
+                        this.score++;
+                        this.round++;
+                        this.scoreText.setText('Score: ' + this.score);
+                        this.roundText.setText('Round: ' + this.round);
+                        this.statusText.setText('Correct! +1');
+                        this.time.delayedCall(800, () => {
+                            this.addToSequence();
+                        });
+                    }
+                } else {
+                    // Wrong
+                    this.isPlayerTurn = false;
+                    this.lives--;
+                    this.livesText.setText('Lives: ' + this.lives);
+                    this.statusText.setText('Wrong! Lives left: ' + this.lives);
+
+                    // Flash screen red briefly
+                    this.cameras.main.flash(300, 255, 0, 0, false, (cam, progress) => {
+                        if (progress === 1) cam.resetFX();
+                    });
+
+                    if (this.lives <= 0) {
+                        this.time.delayedCall(1000, () => this.gameOver());
+                    } else {
+                        this.time.delayedCall(1200, () => {
+                            // Reset player input and replay same sequence
+                            this.playerInput = [];
+                            this.currentStep = 0;
+                            this.isPlaying = true;
+                            this.isPlayerTurn = false;
+                            this.statusText.setText('Watch again...');
+                            this.playSequence();
+                        });
+                    }
+                }
+            }
+
+            gameOver() {
+                this.cameras.main.setBackgroundColor(0x0d0d2b);
+                this.children.removeAll(true);
+
+                const W = this.cameras.main.width;
+                const H = this.cameras.main.height;
+
+                this.add.text(W / 2, H / 2 - 120, 'GAME OVER', {
+                    fontFamily: 'Arial',
+                    fontSize: '52px',
+                    color: '#ffd700',
+                    fontStyle: 'bold'
+                }).setOrigin(0.5);
+
+                this.add.text(W / 2, H / 2 - 40, 'Final Score: ' + this.score, {
+                    fontFamily: 'Arial',
+                    fontSize: '32px',
+                    color: '#ffffff'
+                }).setOrigin(0.5);
+
+                this.add.text(W / 2, H / 2 + 10, 'Round Reached: ' + this.round, {
+                    fontFamily: 'Arial',
+                    fontSize: '24px',
+                    color: '#aaaaaa'
+                }).setOrigin(0.5);
+
+                const btn = this.add.graphics();
+                btn.fillStyle(0xffd700, 1);
+                btn.fillRoundedRect(W / 2 - 100, H / 2 + 80, 200, 60, 20);
+                btn.setInteractive(new Phaser.Geom.Rectangle(-100, 0, 200, 60), Phaser.Geom.Rectangle.Contains);
+                btn.on('pointerover', () => {
+                    btn.clear();
+                    btn.fillStyle(0xffec80, 1);
+                    btn.fillRoundedRect(W / 2 - 100, H / 2 + 80, 200, 60, 20);
+                });
+                btn.on('pointerout', () => {
+                    btn.clear();
+                    btn.fillStyle(0xffd700, 1);
+                    btn.fillRoundedRect(W / 2 - 100, H / 2 + 80, 200, 60, 20);
+                });
+                btn.on('pointerdown', () => {
+                    this.scene.restart();
+                });
+
+                this.add.text(W / 2, H / 2 + 110, 'RESTART', {
+                    fontFamily: 'Arial',
+                    fontSize: '28px',
+                    color: '#0d0d2b',
+                    fontStyle: 'bold'
+                }).setOrigin(0.5);
+            }
+        }
+
+        const config = {
+            type: Phaser.AUTO,
+            parent: 'game-container',
+            width: 600,
+            height: 800,
+            backgroundColor: '#0d0d2b',
+            scale: {
+                mode: Phaser.Scale.FIT,
+                autoCenter: Phaser.Scale.CENTER_BOTH
+            },
+            scene: GameScene
+        };
+
+        const game = new Phaser.Game(config);
+    </script>
+</body>
+</html>
