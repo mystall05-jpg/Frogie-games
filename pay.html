@@ -733,7 +733,26 @@
 </head>
 <body>
 
-    <div class="container">
+    
+<div style="padding:20px;border-bottom:1px solid #333">
+  <h3 style="color:#FFD700;text-align:center">🎮 Select Your Game</h3>
+  <select id="gameSelect" style="width:100%;padding:12px;background:#222;color:white;border:1px solid #FFD700;border-radius:8px;font-size:16px;margin:10px 0">
+    <option value="">-- Choose a game --</option>
+    <option value="mind_grid">🧠 Mind Grid - Memory Game</option>
+    <option value="custom">✨ Custom Game (you describe it)</option>
+    <option value="studio">🏭 Frogie Game Studio - Build Any Game</option>
+  </select>
+  <div id="customDesc" style="display:none;margin-top:10px">
+    <textarea placeholder="Describe your custom game..." 
+      style="width:100%;height:80px;background:#222;color:white;border:1px solid #FFD700;border-radius:8px;padding:10px;font-size:14px"></textarea>
+  </div>
+</div>
+<script>
+document.getElementById('gameSelect').addEventListener('change', function(){
+  document.getElementById('customDesc').style.display = this.value === 'custom' ? 'block' : 'none';
+});
+</script>
+<div class="container">
 
         <!-- HEADER -->
         <header class="header">
