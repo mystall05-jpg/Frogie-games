@@ -32,7 +32,41 @@
   </div>
   <button id="generateBtn">Generate My Game - $5</button>
 
-  <div class="payment">
+  
+<div style="background:#111;border:2px solid #00ff88;border-radius:15px;padding:20px;margin:20px 0;text-align:center">
+  <h2 style="color:#00ff88">🎮 Try It FREE First!</h2>
+  <p style="color:#ccc">Describe a simple game below and we'll generate a demo for you — no payment needed!</p>
+  <p style="color:#aaa;font-size:12px">2 free tries per visitor. Full games unlock after $5 payment.</p>
+  <textarea id="trialDesc" placeholder="Example: a simple snake game with neon colors..." 
+    style="width:90%;height:80px;background:#222;color:white;border:1px solid #00ff88;border-radius:8px;padding:10px;font-size:14px;margin:10px 0"></textarea>
+  <br>
+  <button onclick="generateTrial()" 
+    style="background:#00ff88;color:#000;padding:12px 30px;border:none;border-radius:25px;font-size:16px;font-weight:bold;cursor:pointer">
+    ✨ Generate Free Demo
+  </button>
+  <div id="trialResult" style="margin-top:15px;color:#00ff88;display:none">
+    <p>⚡ Your demo game is being built...</p>
+    <p style="font-size:12px;color:#aaa">Check back in 60 seconds!</p>
+    <p id="trialCount" style="color:#ff6b6b;font-size:12px"></p>
+  </div>
+</div>
+
+<script>
+var trialUsed = parseInt(localStorage.getItem('trialUsed') || '0');
+function generateTrial() {
+  if(trialUsed >= 2) {
+    alert('You have used your 2 free trials! Pay $5 to generate unlimited games.');
+    return;
+  }
+  var desc = document.getElementById('trialDesc').value.trim();
+  if(!desc) { alert('Please describe your game first!'); return; }
+  trialUsed++;
+  localStorage.setItem('trialUsed', trialUsed);
+  document.getElementById('trialResult').style.display='block';
+  document.getElementById('trialCount').textContent = 'Free trials used: ' + trialUsed + '/2';
+}
+</script>
+<div class="payment">
     <p>Pay with ETH to the following wallet:</p>
     <p>0xe38c9c51f57e2F636fEB9eF8371b84E829729424</p>
     <img class="qr" src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=ethereum:0xe38c9c51f57e2F636fEB9eF8371b84E829729424" alt="QR Code">
