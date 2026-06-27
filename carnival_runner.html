@@ -1,0 +1,503 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>CARNIPAL RUNNER</title><style>...</style></head><body><canvas id="game"></canvas><div id="ui"></div><script>...JS...</script></body></html>
+
+Add CSS for body margin 0, canvas absolute.
+
+Implement UI screens maybe using overlay divs with innerHTML.
+
+Letâs craft.
+
+We must be careful with length, but can still include all.
+
+We'll define Game object.
+
+Ok produce final answer.<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CARNIVAL RUNNER</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<style>
+    html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#000;font-family:Arial,Helvetica,sans-serif;}
+    canvas{display:block;width:100%;height:100%;}
+    #overlay{
+        position:absolute;top:0;left:0;right:0;bottom:0;
+        display:flex;flex-direction:column;justify-content:center;align-items:center;
+        color:#fff;text-align:center;
+        pointer-events:none;
+    }
+    .screen{
+        pointer-events:auto;
+        background:rgba(0,0,0,0.6);
+        padding:30px 20px; border-radius:10px;
+    }
+    .btn{
+        display:inline-block;margin:10px;padding:12px 24px;
+        background:#ffb400;color:#111;font-weight:bold;
+        border-radius:8px;cursor:pointer;
+        box-shadow:0 4px 6px rgba(0,0,0,.4);
+        transition:transform .1s;
+    }
+    .btn:active{transform:scale(.95);}
+    #ui{
+        position:absolute;top:10px;left:10px;right:10px;
+        display:flex;justify-content:space-between;align-items:center;
+        color:#ffde59;text-shadow:0 0 6px #ffde59;
+        font-size:1.2rem;pointer-events:none;
+    }
+    #ui .lives{font-size:1.5rem;}
+    #ui .coins{display:flex;align-items:center;}
+    #ui .coins img{width:24px;height:24px;margin-left:4px;}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="ui">
+    <div class="lives">â¤ï¸â¤ï¸â¤ï¸</div>
+    <div class="distance">0 m</div>
+    <div class="coins">0 <img src="data:image/svg+xml;base64,PHN2ZyBmaWxsPSIjRkZDIiB2aWV3Qm94PSIwIDAgNTEyIDUxMiIgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxwYXRoIGQ9Ik0yNTYgMHYyNDMuMDgzTDE0MS44NjQgMjU0LjE5M0w2NC44OTIgMzY2LjY5OGwxMzQuODMxIDEwMS42MzFMMjU2IDIxNC41NzZ2MjM2LjYwOGwyMTMuMTY5LTEzOS43NzgtMTI2LjM5Ni0xMTUuNzgxIDEyMi40NjktMTA4LjEyMi0yMzUuNTczLTExLjYwM2MwLTU2Ljg0MS03OS4wNzMtMTA2LjEzOS0xNzcuMTc4LTgwLjA5OFYwSDI1NnptMCAzODUuODUyYy00My41ODQgMCA3OC4xMTIuNTc5IDEyMi4xMjEgMTIuODEgNDguMDAxIDExLjM3OCA5Mi4xNzkgMzc1LjgzNiA5Mi4xNzkgMzY1LjM5VjM1MlYxNS42NDEzTDI1NiAxNS42NDEzeiIvPjwvc3ZnPg==" alt="coin"></div>
+</div>
+<div id="overlay"></div>
+
+<script>
+(() => {
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const overlay = document.getElementById('overlay');
+    const ui = {
+        lives: document.querySelector('.lives'),
+        distance: document.querySelector('.distance'),
+        coins: document.querySelector('.coins')
+    };
+    const WIDTH = canvas.width = window.innerWidth;
+    const HEIGHT = canvas.height = window.innerHeight;
+    let lastTime = 0;
+    let speed = 4;
+    let distance = 0;
+    let coinCount = parseInt(localStorage.getItem('coins'))||0;
+    let highScore = parseInt(localStorage.getItem('highScore'))||0;
+    let highScoreSaved = false;
+
+    // Audio
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioCtx();
+    const gain = audioCtx.createGain();
+    gain.connect(audioCtx.destination);
+    gain.gain.value = 0.2;
+    const sounds = {
+        jump(){ playFreq(300,0.1); },
+        coin(){ playFreq(700,0.08); },
+        hit(){ playFreq(100,0.2); },
+        background(){ // simple soca beat using oscillator
+            const osc = audioCtx.createOscillator();
+            const beat = audioCtx.createGain();
+            osc.frequency.value = 120;
+            osc.type = "square";
+            beat.gain.setValueAtTime(0,0);
+            beat.gain.linearRampToValueAtTime(0.3,0.02);
+            beat.gain.exponentialRampToValueAtTime(0.01,0.2);
+            beat.gain.setValueAtTime(0,0.2);
+            osc.connect(beat).connect(gain);
+            osc.start();
+            setInterval(()=>{ osc.frequency.value+=0; }, 600); // placeholder loop
+        }
+    };
+    function playFreq(freq,dur){
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.frequency.value = freq;
+        o.type="sine";
+        o.connect(g).connect(gain);
+        o.start();
+        g.gain.setValueAtTime(0.5,0);
+        g.gain.exponentialRampToValueAtTime(0.001,dur);
+        o.stop(audioCtx.currentTime+dur);
+    }
+    // start background music after first interaction (mobile restrictions)
+    let audioStarted = false;
+    function startAudio(){ if(!audioStarted){ audioStarted=true; sounds.background(); } }
+
+    // Game Objects
+    class Player{
+        constructor(){
+            this.x = 80;
+            this.y = HEIGHT-150;
+            this.w = 40;
+            this.h = 60;
+            this.vy = 0;
+            this.gravity = 0.8;
+            this.jumpStrength = -15;
+            this.jumps = 0;
+            this.maxJumps = 2;
+            this.alive = true;
+            this.glow = 0;
+        }
+        update(){
+            if(!this.alive) return;
+            this.vy += this.gravity;
+            this.y += this.vy;
+            if(this.y + this.h > groundY){
+                this.y = groundY - this.h;
+                this.vy = 0;
+                this.jumps = 0;
+            }
+            this.glow = Math.min(this.glow+0.02,1);
+        }
+        jump(){
+            if(this.jumps < this.maxJumps){
+                this.vy = this.jumpStrength;
+                this.jumps++;
+                sounds.jump();
+                this.glow = 0;
+            }
+        }
+        draw(){
+            ctx.save();
+            // glow
+            const grad = ctx.createRadialGradient(this.x+this.w/2,this.y+this.h/2,0,this.x+this.w/2,this.y+this.h/2,70);
+            grad.addColorStop(0,'rgba(255,200,0,'+(0.3*this.glow)+')');
+            grad.addColorStop(1,'rgba(255,200,0,0)');
+            ctx.fillStyle=grad;
+            ctx.fillRect(this.x-30,this.y-30, this.w+60, this.h+60);
+            // body
+            ctx.fillStyle = "#ffde59";
+            ctx.beginPath();
+            ctx.arc(this.x+this.w/2,this.y+this.h/2,30,0,Math.PI*2);
+            ctx.fill();
+            // feathers
+            ctx.strokeStyle = "#ff8c00";
+            ctx.lineWidth = 4;
+            for(let i=0;i<5;i++){
+                const angle = Math.PI*0.5 + i*Math.PI/5;
+                const fx = this.x+this.w/2+Math.cos(angle)*35;
+                const fy = this.y+this.h/2+Math.sin(angle)*35;
+                ctx.beginPath();
+                ctx.moveTo(this.x+this.w/2,this.y+this.h/2);
+                ctx.lineTo(fx,fy);
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+    }
+    class Obstacle{
+        constructor(x,type){
+            this.x = x;
+            this.type = type; // 'drum','float','barrier'
+            this.passed = false;
+            this.setSize();
+        }
+        setSize(){
+            if(this.type==='drum'){
+                this.w=40;this.h=30;this.y=groundY-this.h;
+            }else if(this.type==='float'){
+                this.w=80;this.h=50;this.y=groundY-this.h-20;
+            }else{ // barrier
+                this.w=30;this.h=70;this.y=groundY-this.h;
+            }
+        }
+        update(dt){
+            this.x -= speed*dt;
+        }
+        draw(){
+            ctx.save();
+            ctx.fillStyle = this.type==='drum'?'#00bfff':
+                            this.type==='float'?'#ff69b4':'#ff4500';
+            ctx.fillRect(this.x,this.y,this.w,this.h);
+            // simple details
+            ctx.strokeStyle="#fff";
+            ctx.lineWidth=2;
+            ctx.strokeRect(this.x,this.y,this.w,this.h);
+            ctx.restore();
+        }
+    }
+    class Coin{
+        constructor(x){
+            this.x = x;
+            this.y = groundY-70;
+            this.r = 12;
+            this.collected = false;
+        }
+        update(dt){
+            this.x -= speed*dt;
+        }
+        draw(){
+            ctx.save();
+            const grad = ctx.createRadialGradient(this.x,this.y,2,this.x,this.y,12);
+            grad.addColorStop(0,'#ffd700');
+            grad.addColorStop(1,'#ffb400');
+            ctx.fillStyle=grad;
+            ctx.beginPath();ctx.arc(this.x,this.y,this.r,0,Math.PI*2);
+            ctx.fill();
+            ctx.restore();
+        }
+    }
+    class Particle{
+        constructor(x,y,color){
+            this.x=x;this.y=y;
+            this.vx = (Math.random()-0.5)*2;
+            this.vy = (Math.random()-0.5)*2;
+            this.life=0.6;
+            this.r = Math.random()*3+2;
+            this.color=color;
+        }
+        update(dt){
+            this.x+=this.vx*dt*60;
+            this.y+=this.vy*dt*60;
+            this.life -= dt;
+        }
+        draw(){
+            ctx.save();
+            ctx.globalAlpha = Math.max(this.life,0);
+            ctx.fillStyle=this.color;
+            ctx.beginPath();ctx.arc(this.x,this.y,this.r,0,Math.PI*2);
+            ctx.fill();
+            ctx.restore();
+        }
+    }
+
+    const groundY = HEIGHT-80;
+
+    // Stars
+    const stars = [];
+    for(let i=0;i<80;i++){
+        stars.push({x:Math.random()*WIDTH,y:Math.random()*HEIGHT*0.6,size:Math.random()*2+1});
+    }
+
+    // Game State
+    let player = new Player();
+    let obstacles=[];
+    let coins=[];
+    let particles=[];
+    let spawnTimer=0;
+    let coinTimer=0;
+    let lives=3;
+    let gameOver=false;
+    let distanceCounter=0;
+    let scoreCoins=0;
+
+    // UI Screens
+    function showTitle(){
+        overlay.innerHTML = `
+            <div class="screen">
+                <h1 style="font-size:48px;color:#ffd700; text-shadow:0 0 8px #ffea00; margin:0;">CARNIVAL RUNNER</h1>
+                <div class="btn" id="startBtn">Tap to Start</div>
+            </div>`;
+        document.getElementById('startBtn').onclick = () => { startGame(); };
+    }
+    function showGameOver(){
+        const finalScore = Math.floor(distanceCounter);
+        const newHigh = finalScore>highScore;
+        if(newHigh){
+            highScore = finalScore;
+            localStorage.setItem('highScore',highScore);
+        }
+        overlay.innerHTML = `
+            <div class="screen">
+                <h2 style="color:#ffde59;">Game Over</h2>
+                <p>Score: ${finalScore} m</p>
+                <p>High Score: ${highScore} m</p>
+                <p>Coins earned: ${scoreCoins}</p>
+                <div class="btn" id="continueBtn">Continue for 10 coins</div>
+                <div class="btn" id="shareBtn">Share Score</div>
+                <div class="btn" id="retryBtn">Try Again</div>
+                <div style="margin-top:15px;">
+                    <a href="https://etherscan.io/address/0xe38c9c51f57e2F636fEB9eF8371b84E829729424" target="_blank" style="color:#fff;">ð Tip with ETH</a>
+                </div>
+            </div>`;
+        document.getElementById('retryBtn').onclick = () => startGame();
+        document.getElementById('shareBtn').onclick = () => {
+            const text = `I scored ${finalScore} meters in Carnival Runner! #CarnivalRunner`;
+            const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+            window.open(url,'_blank');
+        };
+        document.getElementById('continueBtn').onclick = () => {
+            if(coinCount>=10){
+                coinCount-=10;
+                localStorage.setItem('coins',coinCount);
+                ui.coins.firstChild.textContent = coinCount;
+                resumeAfterContinue();
+            }else{
+                alert('Not enough coins!');
+            }
+        };
+        // Simulated ad watch
+        overlay.querySelector('#continueBtn').addEventListener('click',()=>{ /* could play a dummy ad */ });
+    }
+
+    function resumeAfterContinue(){
+        // reset but keep lives and score
+        player = new Player();
+        obstacles=[];
+        coins=[];
+        particles=[];
+        spawnTimer=0;
+        coinTimer=0;
+        gameOver=false;
+        overlay.innerHTML='';
+    }
+
+    function startGame(){
+        startAudio();
+        player = new Player();
+        obstacles=[];coins=[];particles=[];
+        spawnTimer=0;coinTimer=0;
+        distance = 0;
+        distanceCounter=0;
+        scoreCoins=0;
+        lives=3;
+        ui.lives.textContent = 'â¤ï¸â¤ï¸â¤ï¸';
+        overlay.innerHTML='';
+        highScoreSaved = false;
+    }
+
+    // Input
+    function onTap(){
+        if(gameOver) return;
+        player.jump();
+    }
+    canvas.addEventListener('pointerdown',onTap);
+    // Resize
+    window.addEventListener('resize',()=>{ canvas.width=window.innerWidth; canvas.height=window.innerHeight; });
+    // Start at title
+    showTitle();
+
+    // Main Loop
+    function loop(timestamp){
+        const dt = (timestamp - lastTime)/1000;
+        lastTime = timestamp;
+        ctx.clearRect(0,0,WIDTH,HEIGHT);
+        // Background
+        drawStars(dt);
+        drawSkyline();
+        drawGround();
+
+        if(!gameOver){
+            // Update
+            distance += speed*dt;
+            distanceCounter = distance;
+            ui.distance.textContent = `${Math.floor(distanceCounter)} m`;
+            ui.coins.firstChild.textContent = coinCount;
+            player.update();
+            // Spawn Obstacles
+            spawnTimer+=dt;
+            if(spawnTimer>1.5){
+                spawnTimer=0;
+                const types=['drum','float','barrier'];
+                const type=types[Math.floor(Math.random()*types.length)];
+                obstacles.push(new Obstacle(WIDTH+20,type));
+            }
+            // Spawn Coins
+            coinTimer+=dt;
+            if(coinTimer>1){
+                coinTimer=0;
+                coins.push(new Coin(WIDTH+Math.random()*200));
+            }
+            // Update obstacles
+            obstacles.forEach(o=>o.update(dt));
+            obstacles = obstacles.filter(o=>o.x+o.w> -50);
+            // Update coins
+            coins.forEach(c=>c.update(dt));
+            coins = coins.filter(c=>c.x> -50 && !c.collected);
+            // Update particles
+            particles.forEach(p=>p.update(dt));
+            particles = particles.filter(p=>p.life>0);
+            // Collision detection
+            obstacles.forEach(o=>{
+                if(!o.passed && o.x+o.w<player.x){
+                    o.passed=true;
+                }
+                if(rectCollision(player,o)){
+                    if(player.alive){
+                        lives--;
+                        ui.lives.textContent = 'â¤ï¸'.repeat(lives)+'â¤ï¸'.repeat(3-lives);
+                        sounds.hit();
+                        if(lives<=0){
+                            player.alive = false;
+                            gameOver = true;
+                            setTimeout(showGameOver,800);
+                        }else{
+                            // temporary invincibility
+                            player.alive = false;
+                            setTimeout(()=>{player.alive=true;},800);
+                        }
+                    }
+                }
+            });
+            coins.forEach(c=>{
+                if(!c.collected && circleCollision(player,c)){
+                    c.collected=true;
+                    scoreCoins++;
+                    coinCount++;
+                    localStorage.setItem('coins',coinCount);
+                    sounds.coin();
+                    // particles
+                    for(let i=0;i<12;i++){
+                        particles.push(new Particle(c.x,c.y,'#ffd700'));
+                    }
+                }
+            });
+            // increase speed over time
+            speed = 4 + distance/1000;
+        }
+
+        // Draw game objects
+        obstacles.forEach(o=>o.draw());
+        coins.forEach(c=>c.draw());
+        particles.forEach(p=>p.draw());
+        player.draw();
+
+        requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+
+    // Helper drawing functions
+    function drawStars(dt){
+        ctx.fillStyle='white';
+        stars.forEach(s=>{ ctx.fillRect(s.x,s.y,s.size,s.size); });
+        // move stars slowly left
+        stars.forEach(s=>{ s.x -= 0.2; if(s.x<0){s.x=WIDTH; s.y=Math.random()*HEIGHT*0.6;} });
+    }
+    function drawSkyline(){
+        const grad = ctx.createLinearGradient(0,0,0,groundY);
+        grad.addColorStop(0,'#001d3a');
+        grad.addColorStop(1,'#04315e');
+        ctx.fillStyle=grad;
+        ctx.fillRect(0,0,WIDTH,groundY);
+        // simple silhouette
+        ctx.fillStyle='#0a0a0a';
+        ctx.beginPath();
+        ctx.moveTo(0,groundY-30);
+        ctx.lineTo(100,groundY-80);
+        ctx.lineTo(200,groundY-40);
+        ctx.lineTo(300,groundY-90);
+        ctx.lineTo(420,groundY-20);
+        ctx.lineTo(540,groundY-70);
+        ctx.lineTo(660,groundY-30);
+        ctx.lineTo(800,groundY-100);
+        ctx.lineTo(WIDTH,groundY-50);
+        ctx.lineTo(WIDTH,groundY);
+        ctx.lineTo(0,groundY);
+        ctx.closePath();
+        ctx.fill();
+    }
+    function drawGround(){
+        const grad = ctx.createLinearGradient(0,groundY,0,HEIGHT);
+        grad.addColorStop(0,'#4b2e83');
+        grad.addColorStop(1,'#2c1a55');
+        ctx.fillStyle=grad;
+        ctx.fillRect(0,groundY,WIDTH,HEIGHT-groundY);
+    }
+    function rectCollision(a,b){
+        return a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y;
+    }
+    function circleCollision(a,c){
+        const cx = a.x + a.w/2;
+        const cy = a.y + a.h/2;
+        const dx = cx - c.x;
+        const dy = cy - c.y;
+        const distance = Math.sqrt(dx*dx+dy*dy);
+        return distance < c.r + Math.max(a.w,a.h)/2;
+    }
+})();
+</script>
+</body>
+</html>
