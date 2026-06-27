@@ -314,5 +314,35 @@
 
         const game = new Phaser.Game(config);
     </script>
+
+<div id="shop" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:999;text-align:center;color:white;font-family:Arial;padding:20px">
+  <h2 style="color:#FFD700">⚡ Power Up Shop</h2>
+  <div style="margin:15px;padding:15px;background:#111;border:1px solid #FFD700;border-radius:10px">
+    <h3>Extra Life — 0.001 ETH</h3>
+    <p style="font-size:12px;color:#aaa">Send ETH to:</p>
+    <p style="font-size:11px;color:#FFD700;word-break:break-all">0xe38c9c51f57e2F636fEB9eF8371b84E829729424</p>
+    <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=ethereum:0xe38c9c51f57e2F636fEB9eF8371b84E829729424?value=1000000000000000" style="margin:10px"/>
+    <br><button onclick="closeShop();addLife()" style="background:#FFD700;color:#000;padding:10px 20px;border:none;border-radius:5px;font-size:16px;margin:5px">✅ I Sent Payment</button>
+  </div>
+  <div style="margin:15px;padding:15px;background:#111;border:1px solid #FFD700;border-radius:10px">
+    <h3>Double Score — 0.001 ETH</h3>
+    <p style="font-size:12px;color:#aaa">Send ETH to:</p>
+    <p style="font-size:11px;color:#FFD700;word-break:break-all">0xe38c9c51f57e2F636fEB9eF8371b84E829729424</p>
+    <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=ethereum:0xe38c9c51f57e2F636fEB9eF8371b84E829729424?value=1000000000000000" style="margin:10px"/>
+    <br><button onclick="closeShop();doubleScore()" style="background:#FFD700;color:#000;padding:10px 20px;border:none;border-radius:5px;font-size:16px;margin:5px">✅ I Sent Payment</button>
+  </div>
+  <button onclick="closeShop()" style="background:#333;color:white;padding:10px 20px;border:none;border-radius:5px;margin:10px">Close</button>
+</div>
+
+<script>
+function openShop(){ document.getElementById('shop').style.display='block'; }
+function closeShop(){ document.getElementById('shop').style.display='none'; }
+function addLife(){ alert('❤️ Extra life added! Thanks for your support!'); }
+function doubleScore(){ alert('⚡ Double score activated! Thanks for your support!'); }
+</script>
+
+<div style="position:fixed;bottom:10px;right:10px;z-index:998">
+  <button onclick="openShop()" style="background:#FFD700;color:#000;padding:10px 15px;border:none;border-radius:50px;font-size:14px;font-weight:bold">⚡ Shop</button>
+</div>
 </body>
 </html>
