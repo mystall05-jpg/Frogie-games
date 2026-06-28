@@ -1,0 +1,14 @@
+{
+  "name": "frogie-games",
+  "version": "1.0.0",
+  "description": "Frogie Game Studio - Made in Trinidad",
+  "main": "index.js",
+  "scripts": {
+    "build": "echo 'No build needed'"
+  },
+  "dependencies": {
+    "@capacitor/android": "^5.0.0",
+    "@capacitor/core": "^5.0.0",
+    "@capacitor/cli": "^5.0.0"
+  }
+}

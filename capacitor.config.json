@@ -1,0 +1,6 @@
+{
+  "appId": "com.frogie.games",
+  "appName": "Frogie Games",
+  "webDir": ".",
+  "bundledWebRuntime": false
+}
