@@ -344,5 +344,46 @@ function doubleScore(){ alert('⚡ Double score activated! Thanks for your suppo
 <div style="position:fixed;bottom:10px;right:10px;z-index:998">
   <button onclick="openShop()" style="background:#FFD700;color:#000;padding:10px 15px;border:none;border-radius:50px;font-size:14px;font-weight:bold">⚡ Shop</button>
 </div>
+
+<!-- NOWPayments Integration -->
+<style>
+#np-btn{background:linear-gradient(135deg,#FFD700,#ff8c00);color:#000;border:none;padding:15px 30px;border-radius:30px;font-size:18px;font-weight:bold;cursor:pointer;width:100%;margin:10px 0;}
+#np-info{display:none;background:#111;border:2px solid #FFD700;border-radius:15px;padding:20px;margin:10px;text-align:center;}
+#np-addr{color:#FFD700;font-size:11px;word-break:break-all;margin:10px 0;}
+</style>
+<div style="position:fixed;bottom:60px;right:10px;z-index:999;width:200px">
+  <button id="np-btn" onclick="openPayment(5,'Frogie Game')">💳 Buy - $5</button>
+  <div id="np-info">
+    <p style="color:#00ff88;font-size:20px;font-weight:bold" id="np-amount"></p>
+    <p style="color:white;font-size:12px">Send ETH to:</p>
+    <p id="np-addr"></p>
+    <p style="color:#aaa;font-size:10px">Payment auto-confirms</p>
+  </div>
+</div>
+<script>
+async function openPayment(amount, desc) {
+  const btn = document.getElementById('np-btn');
+  const info = document.getElementById('np-info');
+  btn.textContent = '⏳ Loading...';
+  try {
+    const r = await fetch('https://api.nowpayments.io/v1/payment', {
+      method:'POST',
+      headers:{'x-api-key':'UVen1GHwVagjcHpjdk2hGpxF61/Msgft','Content-Type':'application/json'},
+      body:JSON.stringify({price_amount:amount,price_currency:'usd',pay_currency:'eth',order_description:desc})
+    });
+    const d = await r.json();
+    if(d.pay_address){
+      document.getElementById('np-amount').textContent = d.pay_amount + ' ETH';
+      document.getElementById('np-addr').textContent = d.pay_address;
+      info.style.display = 'block';
+      btn.textContent = '✅ Send payment above';
+    } else {
+      btn.textContent = '❌ Pay ETH direct: 0xe38c9c51f57e2F636f...';
+    }
+  } catch(e) {
+    btn.textContent = '❌ Pay ETH: 0xe38c9c51f57e2F636f...';
+  }
+}
+</script>
 </body>
 </html>

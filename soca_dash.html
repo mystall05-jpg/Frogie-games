@@ -68,5 +68,46 @@ function gameOver(){gameRunning=false;cancelAnimationFrame(animId);document.getE
 function gameLoop(){if(!gameRunning)return;animId=requestAnimationFrame(gameLoop);frame++;ctx.clearRect(0,0,W,H);drawBackground();playerVY+=H*0.001;playerY+=playerVY;if(playerY>=ground){playerY=ground;playerVY=0;jumping=false;doubleJumped=false;}if(frame%300===0)speed+=0.5;score+=speed*0.05;if(frame%Math.max(60,120-Math.floor(score/50))===0){const h=H*0.08+Math.random()*H*0.08;obstacles.push({x:W+50,y:ground,w:W*0.06,h:h});}if(frame%45===0)coins.push({x:W+50,y:ground-H*0.1-Math.random()*H*0.2});obstacles=obstacles.filter(o=>{o.x-=speed;ctx.fillStyle='#ff2200';ctx.shadowColor='#ff0000';ctx.shadowBlur=15;ctx.font=(o.w*0.6*2)+'px Arial';ctx.textAlign='center';ctx.fillText('🥁',o.x,o.y-o.h*0.3);ctx.shadowBlur=0;const px=playerX,py=playerY,size=W*0.05;if(Math.abs(px-o.x)<o.w*0.7&&py-size*1.2<o.y&&py>o.y-o.h){lives--;spawnParticles(px,py,'💥');playSound(100,0.4);if(lives<=0){gameOver();return false;}return false;}return o.x>-50;});coins=coins.filter(c=>{c.x-=speed;ctx.save();ctx.translate(c.x,c.y);ctx.rotate(frame*0.1);ctx.font=(W*0.05)+'px Arial';ctx.textAlign='center';ctx.fillText('⭐',0,8);ctx.restore();const px=playerX,py=playerY;if(Math.abs(px-c.x)<W*0.06&&Math.abs(py-c.y)<H*0.08){coinCount++;spawnParticles(c.x,c.y,'⭐');playSound(600,0.1);return false;}return c.x>-50;});drawPlayer();const hearts=['❤️','❤️','❤️'].slice(0,lives).join('')+['🖤','🖤','🖤'].slice(0,3-lives).join('');document.getElementById('lives').textContent=hearts;document.getElementById('score-display').textContent=Math.floor(score)+'m';document.getElementById('coins-display').textContent='⭐'+coinCount;}
 function startGame(){document.getElementById('title-screen').style.display='none';if(animId)cancelAnimationFrame(animId);initGame();gameLoop();}
 </script>
+
+<!-- NOWPayments Integration -->
+<style>
+#np-btn{background:linear-gradient(135deg,#FFD700,#ff8c00);color:#000;border:none;padding:15px 30px;border-radius:30px;font-size:18px;font-weight:bold;cursor:pointer;width:100%;margin:10px 0;}
+#np-info{display:none;background:#111;border:2px solid #FFD700;border-radius:15px;padding:20px;margin:10px;text-align:center;}
+#np-addr{color:#FFD700;font-size:11px;word-break:break-all;margin:10px 0;}
+</style>
+<div style="position:fixed;bottom:60px;right:10px;z-index:999;width:200px">
+  <button id="np-btn" onclick="openPayment(5,'Frogie Game')">💳 Buy - $5</button>
+  <div id="np-info">
+    <p style="color:#00ff88;font-size:20px;font-weight:bold" id="np-amount"></p>
+    <p style="color:white;font-size:12px">Send ETH to:</p>
+    <p id="np-addr"></p>
+    <p style="color:#aaa;font-size:10px">Payment auto-confirms</p>
+  </div>
+</div>
+<script>
+async function openPayment(amount, desc) {
+  const btn = document.getElementById('np-btn');
+  const info = document.getElementById('np-info');
+  btn.textContent = '⏳ Loading...';
+  try {
+    const r = await fetch('https://api.nowpayments.io/v1/payment', {
+      method:'POST',
+      headers:{'x-api-key':'UVen1GHwVagjcHpjdk2hGpxF61/Msgft','Content-Type':'application/json'},
+      body:JSON.stringify({price_amount:amount,price_currency:'usd',pay_currency:'eth',order_description:desc})
+    });
+    const d = await r.json();
+    if(d.pay_address){
+      document.getElementById('np-amount').textContent = d.pay_amount + ' ETH';
+      document.getElementById('np-addr').textContent = d.pay_address;
+      info.style.display = 'block';
+      btn.textContent = '✅ Send payment above';
+    } else {
+      btn.textContent = '❌ Pay ETH direct: 0xe38c9c51f57e2F636f...';
+    }
+  } catch(e) {
+    btn.textContent = '❌ Pay ETH: 0xe38c9c51f57e2F636f...';
+  }
+}
+</script>
 </body>
 </html>
