@@ -1,0 +1,275 @@
+We need to output a complete Python/Pygame code for a game called 'frogie_dream_1_1942'. Must be runnable. Should include score system, levels, game over, touch controls (so probably also support keyboard? but mention touch). Use only code, no markdown. Must include import, main loop, etc.
+
+Design: Futuristic sci-fi simulation. Maybe a "gravity glitch runner" where player controls a hovering drone collecting energy orbs, avoiding obstacles, with level progression. Touch controls: detect mouse clicks as tap to thrust upward.
+
+Implementation: Pygame, screen size, assets placeholders (draw shapes). Use simple vector physics.
+
+Score based on distance/time and collected items.
+
+Levels: increase speed, more obstacles.
+
+Game over when collision.
+
+Include start screen, game over screen, restart.
+
+All within single file.
+
+Will use pygame.font, pygame.time.
+
+Touch: treat mouse button down as thrust.
+
+Implement physics: y velocity, gravity.
+
+Obstacles move left.
+
+Collectibles.
+
+Let's produce code.
+
+Also must be Python 3. Use pygame.
+
+Ok.import pygame, sys, random, math, time
+
+# ---------- CONFIG ----------
+TITLE = "frogie_dream_1_1942"
+WIDTH, HEIGHT = 800, 600
+FPS = 60
+
+# Colors
+BG_COLOR = (10, 10, 30)
+DRONE_COLOR = (0, 255, 150)
+OBSTACLE_COLOR = (200, 40, 70)
+ORB_COLOR = (100, 200, 255)
+TEXT_COLOR = (255, 255, 255)
+
+# Drone physics
+GRAVITY = 0.35
+THRUST = -8
+MAX_VEL_Y = 12
+
+# Gameplay
+OBSTACLE_FREQ = 1500          # ms
+ORB_FREQ = 2000               # ms
+LEVEL_TIME = 20000            # ms per level
+LEVEL_SPEED_INCREASE = 0.15   # % speed per level
+
+# ---------- INITIALISE ----------
+pygame.init()
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption(TITLE)
+clock = pygame.time.Clock()
+font_large = pygame.font.SysFont("Arial", 48)
+font_small = pygame.font.SysFont("Arial", 24)
+
+# ---------- CLASSES ----------
+class Drone:
+    RADIUS = 20
+
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.x = WIDTH * 0.15
+        self.y = HEIGHT // 2
+        self.vel_y = 0
+        self.alive = True
+
+    def update(self, thrusting):
+        if thrusting:
+            self.vel_y = THRUST
+        else:
+            self.vel_y += GRAVITY
+        self.vel_y = max(-MAX_VEL_Y, min(self.vel_y, MAX_VEL_Y))
+        self.y += self.vel_y
+        if self.y < self.RADIUS:
+            self.y = self.RADIUS
+            self.vel_y = 0
+        if self.y > HEIGHT - self.RADIUS:
+            self.y = HEIGHT - self.RADIUS
+            self.vel_y = 0
+
+    def draw(self, surf):
+        pygame.draw.circle(surf, DRONE_COLOR, (int(self.x), int(self.y)), self.RADIUS)
+
+    def get_rect(self):
+        return pygame.Rect(self.x - self.RADIUS, self.y - self.RADIUS,
+                           self.RADIUS * 2, self.RADIUS * 2)
+
+
+class Obstacle:
+    WIDTH = 40
+    GAP_HEIGHT = 180
+
+    def __init__(self, speed):
+        self.x = WIDTH + self.WIDTH
+        self.speed = speed
+        # Random gap position
+        self.gap_y = random.randint(100, HEIGHT - 100 - self.GAP_HEIGHT)
+
+    def update(self, dt):
+        self.x -= self.speed * dt
+
+    def draw(self, surf):
+        top_rect = pygame.Rect(self.x, 0, self.WIDTH, self.gap_y)
+        bottom_rect = pygame.Rect(self.x, self.gap_y + self.GAP_HEIGHT,
+                                 self.WIDTH, HEIGHT - (self.gap_y + self.GAP_HEIGHT))
+        pygame.draw.rect(surf, OBSTACLE_COLOR, top_rect)
+        pygame.draw.rect(surf, OBSTACLE_COLOR, bottom_rect)
+
+    def off_screen(self):
+        return self.x + self.WIDTH < 0
+
+    def collides(self, drone_rect):
+        top_rect = pygame.Rect(self.x, 0, self.WIDTH, self.gap_y)
+        bottom_rect = pygame.Rect(self.x, self.gap_y + self.GAP_HEIGHT,
+                                   self.WIDTH, HEIGHT - (self.gap_y + self.GAP_HEIGHT))
+        return top_rect.colliderect(drone_rect) or bottom_rect.colliderect(drone_rect)
+
+
+class Orb:
+    RADIUS = 12
+
+    def __init__(self, speed):
+        self.x = WIDTH + random.randint(0, 200)
+        self.y = random.randint(50, HEIGHT - 50)
+        self.speed = speed
+        self.collected = False
+
+    def update(self, dt):
+        self.x -= self.speed * dt
+
+    def draw(self, surf):
+        pygame.draw.circle(surf, ORB_COLOR, (int(self.x), int(self.y)), self.RADIUS)
+
+    def off_screen(self):
+        return self.x + self.RADIUS < 0
+
+    def collides(self, drone_rect):
+        orb_rect = pygame.Rect(self.x - self.RADIUS, self.y - self.RADIUS,
+                               self.RADIUS * 2, self.RADIUS * 2)
+        return drone_rect.colliderect(orb_rect)
+
+
+# ---------- HELPERS ----------
+def draw_text_center(surf, text, font, color, y):
+    rendered = font.render(text, True, color)
+    rect = rendered.get_rect(center=(WIDTH // 2, y))
+    surf.blit(rendered, rect)
+
+def reset_game():
+    global drone, obstacles, orbs, score, start_time, level, speed_factor
+    drone = Drone()
+    obstacles = []
+    orbs = []
+    score = 0
+    start_time = pygame.time.get_ticks()
+    level = 1
+    speed_factor = 1.0
+    pygame.time.set_timer(pygame.USEREVENT + 1, OBSTACLE_FREQ)
+    pygame.time.set_timer(pygame.USEREVENT + 2, ORB_FREQ)
+
+def next_level():
+    global level, speed_factor, level_start_time
+    level += 1
+    speed_factor *= (1 + LEVEL_SPEED_INCREASE)
+    level_start_time = pygame.time.get_ticks()
+
+# ---------- GAME STATE ----------
+reset_game()
+game_over = False
+level_start_time = pygame.time.get_ticks()
+touch_active = False  # for touch / mouse hold
+
+# ---------- MAIN LOOP ----------
+while True:
+    dt = clock.tick(FPS) / 1000.0  # seconds
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            sys.exit()
+
+        # Touch / mouse handling (press and hold = thrust)
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            touch_active = True
+        if event.type == pygame.MOUSEBUTTONUP:
+            touch_active = False
+
+        # Keyboard fallback
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_SPACE:
+                touch_active = True
+        if event.type == pygame.KEYUP:
+            if event.key == pygame.K_SPACE:
+                touch_active = False
+
+        # Obstacle spawn
+        if event.type == pygame.USEREVENT + 1:
+            obstacles.append(Obstacle(speed=250 * speed_factor))
+
+        # Orb spawn
+        if event.type == pygame.USEREVENT + 2:
+            orbs.append(Orb(speed=250 * speed_factor))
+
+        # Restart after game over
+        if game_over and event.type == pygame.KEYDOWN and event.key == pygame.K_r:
+            reset_game()
+            game_over = False
+
+    if not game_over:
+        # Update level based on time
+        if pygame.time.get_ticks() - level_start_time > LEVEL_TIME:
+            next_level()
+
+        # Update drone
+        drone.update(touch_active)
+
+        # Update obstacles
+        for obs in obstacles:
+            obs.update(dt)
+        obstacles = [o for o in obstacles if not o.off_screen()]
+
+        # Update orbs
+        for orb in orbs:
+            orb.update(dt)
+        orbs = [o for o in orbs if not o.off_screen() and not o.collected]
+
+        # Collision detection
+        d_rect = drone.get_rect()
+        for obs in obstacles:
+            if obs.collides(d_rect):
+                drone.alive = False
+                break
+        if not drone.alive:
+            game_over = True
+            pygame.time.set_timer(pygame.USEREVENT + 1, 0)
+            pygame.time.set_timer(pygame.USEREVENT + 2, 0)
+
+        # Orbs collection
+        for orb in orbs:
+            if orb.collides(d_rect):
+                orb.collected = True
+                score += 10
+
+        # Score increment over time
+        score += int(dt * 5 * level)
+
+    # ---------- DRAW ----------
+    screen.fill(BG_COLOR)
+
+    # Draw entities
+    drone.draw(screen)
+    for obs in obstacles:
+        obs.draw(screen)
+    for orb in orbs:
+        orb.draw(screen)
+
+    # UI
+    draw_text_center(screen, f"SCORE: {score}", font_small, TEXT_COLOR, 30)
+    draw_text_center(screen, f"LEVEL: {level}", font_small, TEXT_COLOR, 60)
+
+    if game_over:
+        draw_text_center(screen, "GAME OVER", font_large, TEXT_COLOR, HEIGHT // 2 - 40)
+        draw_text_center(screen, "PRESS R TO RESTART", font_small, TEXT_COLOR, HEIGHT // 2 + 30)
+
+    pygame.display.flip()

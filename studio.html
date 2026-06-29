@@ -99,5 +99,46 @@ document.getElementById('generateBtn').addEventListener('click', function(){
     }).catch(()=>{});
 });
 </script>
+
+<script>
+async function payNow(amount, description) {
+  const btn = document.getElementById('pay-btn');
+  btn.textContent = '⏳ Creating payment...';
+  try {
+    const response = await fetch('https://api.nowpayments.io/v1/payment', {
+      method: 'POST',
+      headers: {
+        'x-api-key': 'UVen1GHwVagjcHpjdk2hGpxF61/Msgft',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        price_amount: amount,
+        price_currency: 'usd',
+        pay_currency: 'eth',
+        order_description: description,
+        ipn_callback_url: 'https://mystall05-jpg.github.io/Frogie-games/'
+      })
+    });
+    const data = await response.json();
+    if(data.payment_id) {
+      btn.textContent = '✅ Send payment to:';
+      document.getElementById('pay-address').textContent = data.pay_address;
+      document.getElementById('pay-amount').textContent = data.pay_amount + ' ETH';
+      document.getElementById('payment-info').style.display = 'block';
+    } else {
+      btn.textContent = '❌ Error - try ETH direct';
+    }
+  } catch(e) {
+    btn.textContent = '❌ Error - pay direct';
+    console.error(e);
+  }
+}
+</script>
+<div id="payment-info" style="display:none;background:#111;padding:15px;border-radius:10px;margin:10px;text-align:center">
+  <p style="color:#FFD700">Send exactly:</p>
+  <p id="pay-amount" style="color:#00ff88;font-size:24px;font-weight:bold"></p>
+  <p style="color:#FFD700">To ETH address:</p>
+  <p id="pay-address" style="color:white;font-size:12px;word-break:break-all"></p>
+</div>
 </body>
 </html>
