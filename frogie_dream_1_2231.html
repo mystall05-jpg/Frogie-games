@@ -1,0 +1,78 @@
+import pygame
+import random
+
+pygame.init()
+
+colors = {
+    'bg': (10, 15, 13),
+    'fg': (232, 245, 233),
+    'muted': (74, 109, 82),
+    'accent': (0, 255, 136),
+    'accent2': (0, 212, 255),
+    'warn': (255, 204, 0),
+    'danger': (255, 51, 102),
+    'card': (17, 26, 22),
+    'border': (30, 26, 26)
+}
+
+screen = pygame.display.set_mode((800, 600))
+pygame.display.set_caption("SYMBIOSIS Ã¢ÂÂ Neuro-Organic Infrastructure Simulator")
+font = pygame.font.SysFont(None, 36)
+
+frog = pygame.Rect(400, 500, 50, 50)
+frog_speed = 7
+score = 0
+level = 1
+game_over = False
+last_score_update = pygame.time.get_ticks()
+
+while True:
+    screen.fill(colors['bg'])
+    
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            exit()
+        elif event.type == pygame.TOUCH:
+            for touch in event.touches:
+                x, y = touch.pos
+                if x < 400:
+                    frog.x -= frog_speed
+                else:
+                    frog.x += frog_speed
+                frog.clamp_ip(screen.get_rect())
+        
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_LEFT:
+                frog.x -= frog_speed
+            elif event.key == pygame.K_RIGHT:
+                frog.x += frog_speed
+            frog.clamp_ip(screen.get_rect())
+
+    current_time = pygame.time.get_ticks()
+    if current_time - last_score_update > 500:
+        score += 1
+        last_score_update = current_time
+
+    if score >= 100 * level:
+        level += 1
+        frog_speed += 1
+
+    if frog.top > 600:
+        game_over = True
+
+    pygame.draw.rect(screen, colors['accent'], frog)
+    
+    score_text = font.render(f"Score: {score}", True, colors['fg'])
+    level_text = font.render(f"Level: {level}", True, colors['fg'])
+    screen.blit(score_text, (10, 10))
+    screen.blit(level_text, (10, 50))
+
+    if game_over:
+        game_over_text = font.render("GAME OVER!", True, colors['danger'])
+        screen.blit(game_over_text, (300, 300))
+        pygame.time.wait(3000)
+        pygame.quit()
+        exit()
+
+    pygame.display.flip()

@@ -1,0 +1,417 @@
+import pygame
+import random
+import math
+import sys
+
+pygame.init()
+pygame.mixer.init()
+
+WIDTH, HEIGHT = 800, 600
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("FROGIE DREAM 1.0237")
+clock = pygame.time.Clock()
+font_large = pygame.font.Font(None, 72)
+font_medium = pygame.font.Font(None, 48)
+font_small = pygame.font.Font(None, 28)
+
+BLACK = (5, 5, 20)
+WHITE = (240, 240, 255)
+NEON_CYAN = (0, 255, 255)
+NEON_MAGENTA = (255, 0, 255)
+NEON_GREEN = (57, 255, 20)
+NEON_YELLOW = (255, 255, 100)
+NEON_ORANGE = (255, 165, 0)
+NEON_PINK = (255, 20, 147)
+FROG_GREEN = (100, 220, 80)
+FROG_DARK = (40, 120, 30)
+RED_GLOW = (255, 50, 50)
+PURPLE = (180, 60, 255)
+
+GRAVITY = 0.55
+JUMP_POWER = -11
+PLAYER_SPEED = 5.5
+MAX_LIVES = 3
+
+class Star:
+    def __init__(self):
+        self.x = random.randint(0, WIDTH)
+        self.y = random.randint(0, HEIGHT)
+        self.size = random.uniform(0.5, 2.5)
+        self.speed = random.uniform(0.2, 1.0)
+        self.brightness = random.randint(100, 255)
+
+    def update(self):
+        self.y += self.speed
+        if self.y > HEIGHT:
+            self.y = 0
+            self.x = random.randint(0, WIDTH)
+
+    def draw(self, surf):
+        alpha = int(self.brightness * (0.8 + 0.2 * math.sin(pygame.time.get_ticks() * 0.002 + self.x)))
+        alpha = max(0, min(255, alpha))
+        color = (alpha, alpha, int(alpha * 0.9))
+        pygame.draw.circle(surf, color, (int(self.x), int(self.y)), max(1, int(self.size)))
+
+class Particle:
+    def __init__(self, x, y, color, vel=None, life=30):
+        self.x = x
+        self.y = y
+        if vel:
+            self.vx, self.vy = vel
+        else:
+            angle = random.uniform(0, 2 * math.pi)
+            speed = random.uniform(1, 5)
+            self.vx = math.cos(angle) * speed
+            self.vy = math.sin(angle) * speed
+        self.color = color
+        self.life = life
+        self.max_life = life
+        self.size = random.uniform(2, 5)
+
+    def update(self):
+        self.x += self.vx
+        self.y += self.vy
+        self.vy += 0.1
+        self.life -= 1
+        return self.life > 0
+
+    def draw(self, surf):
+        alpha = int((self.life / self.max_life) * 255)
+        color = (*self.color[:3], alpha) if len(self.color) == 3 else self.color
+        size = self.size * (self.life / self.max_life)
+        s = pygame.Surface((int(size * 2) + 2, int(size * 2) + 2), pygame.SRCALPHA)
+        c = (*self.color[:3], alpha)
+        pygame.draw.circle(s, c, (int(size) + 1, int(size) + 1), int(size))
+        surf.blit(s, (int(self.x - size), int(self.y - size)))
+
+class Player:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.w = 28
+        self.h = 28
+        self.vx = 0
+        self.vy = 0
+        self.on_ground = False
+        self.facing = 1
+        self.anim_timer = 0
+        self.walk_cycle = 0
+        self.invincible = 0
+        self.alive = True
+        self.lives = MAX_LIVES
+
+    def move_left(self):
+        self.vx = -PLAYER_SPEED
+        self.facing = -1
+
+    def move_right(self):
+        self.vx = PLAYER_SPEED
+        self.facing = 1
+
+    def stop(self):
+        self.vx = 0
+
+    def jump(self):
+        if self.on_ground:
+            self.vy = JUMP_POWER
+            self.on_ground = False
+            return True
+        return False
+
+    def update(self, platforms):
+        if not self.alive:
+            return
+        if self.invincible > 0:
+            self.invincible -= 1
+
+        self.vy += GRAVITY
+        self.x += self.vx
+        self.y += self.vy
+
+        if self.x < 0:
+            self.x = 0
+        if self.x > WIDTH - self.w:
+            self.x = WIDTH - self.w
+
+        self.on_ground = False
+        for plat in platforms:
+            px, py, pw, ph = plat.rect
+            if (self.x < px + pw and self.x + self.w > px and
+                self.y < py + ph and self.y + self.h > py):
+                if self.vy > 0 and self.y + self.h - self.vy <= py + 4:
+                    self.y = py - self.h
+                    self.vy = 0
+                    self.on_ground = True
+                elif self.vy < 0 and self.y - self.vy >= py + ph - 4:
+                    self.y = py + ph
+                    self.vy = 0
+                else:
+                    if self.vx > 0:
+                        self.x = px - self.w
+                    elif self.vx < 0:
+                        self.x = px + pw
+
+        if self.y > HEIGHT + 50:
+            self.alive = False
+
+        if self.on_ground and abs(self.vx) > 0.5:
+            self.walk_cycle += 0.15
+        else:
+            self.walk_cycle = 0
+
+    def draw(self, surf):
+        if not self.alive:
+            return
+        if self.invincible > 0 and self.invincible % 6 < 3:
+            return
+
+        cx = self.x + self.w // 2
+        cy = self.y + self.h // 2
+
+        body_color = FROG_GREEN
+        belly_color = (150, 240, 130)
+
+        pygame.draw.ellipse(surf, body_color,
+                           (self.x + 2, self.y + self.h // 2 - 2, self.w - 4, self.h // 2 + 4))
+
+        pygame.draw.ellipse(surf, belly_color,
+                           (self.x + 6, self.y + self.h // 2 + 2, self.w - 12, self.h // 4))
+
+        eye_offset_x = 6 * self.facing
+        eye_radius = 5
+        pygame.draw.circle(surf, WHITE,
+                          (cx - 5 + eye_offset_x, cy - 6), eye_radius)
+        pygame.draw.circle(surf, WHITE,
+                          (cx + 5 + eye_offset_x, cy - 6), eye_radius)
+        pupil_radius = 3
+        pygame.draw.circle(surf, BLACK,
+                          (cx - 5 + eye_offset_x + 2 * self.facing, cy - 6), pupil_radius)
+        pygame.draw.circle(surf, BLACK,
+                          (cx + 5 + eye_offset_x + 2 * self.facing, cy - 6), pupil_radius)
+
+        mouth_y = cy + 2
+        if self.on_ground:
+            pygame.draw.arc(surf, FROG_DARK,
+                           (cx - 8, mouth_y, 16, 8), 0, math.pi, 2)
+        else:
+            pygame.draw.ellipse(surf, FROG_DARK,
+                               (cx - 6, mouth_y - 2, 12, 6), 1)
+
+        leg_offset = 4 * math.sin(self.walk_cycle)
+        pygame.draw.ellipse(surf, body_color,
+                           (self.x - 4, self.y + self.h - 8 + int(leg_offset), 8, 12))
+        pygame.draw.ellipse(surf, body_color,
+                           (self.x + self.w - 4, self.y + self.h - 8 - int(leg_offset), 8, 12))
+
+        arm_y = self.y + self.h // 2 + 2
+        pygame.draw.ellipse(surf, body_color,
+                           (self.x - 3, arm_y, 6, 10))
+        pygame.draw.ellipse(surf, body_color,
+                           (self.x + self.w - 3, arm_y, 6, 10))
+
+class Platform:
+    def __init__(self, x, y, w, h, color=None):
+        self.rect = pygame.Rect(x, y, w, h)
+        self.color = color if color else random.choice([NEON_CYAN, NEON_MAGENTA, NEON_GREEN])
+        self.t = random.uniform(0, 100)
+
+    def update(self):
+        self.t += 0.02
+
+    def draw(self, surf):
+        r = self.rect
+        glow_color = (*self.color[:3], 60)
+        glow_surf = pygame.Surface((r.w + 12, r.h + 12), pygame.SRCALPHA)
+        for i in range(6, 0, -1):
+            alpha = max(0, 40 - i * 6)
+            c = (*self.color[:3], alpha)
+            pygame.draw.rect(glow_surf, c,
+                            (6 - i, 6 - i, r.w + i * 2, r.h + i * 2),
+                            border_radius=6)
+        surf.blit(glow_surf, (r.x - 6, r.y - 6))
+
+        inner_color = (min(255, self.color[0] // 2 + 40),
+                      min(255, self.color[1] // 2 + 40),
+                      min(255, self.color[2] // 2 + 40))
+        pygame.draw.rect(surf, inner_color, r, border_radius=4)
+        pygame.draw.rect(surf, self.color, r, 2, border_radius=4)
+
+        pulse = 180 + 75 * math.sin(self.t * 3)
+        accent = (min(255, int(self.color[0] * pulse // 255)),
+                 min(255, int(self.color[1] * pulse // 255)),
+                 min(255, int(self.color[2] * pulse // 255)))
+        pygame.draw.line(surf, accent,
+                        (r.x + 4, r.y + 2), (r.x + r.w - 4, r.y + 2), 2)
+
+class Orb:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.radius = 10
+        self.base_radius = 10
+        self.t = random.uniform(0, 100)
+        self.color = NEON_YELLOW
+        self.collected = False
+
+    def update(self):
+        self.t += 0.04
+        self.radius = self.base_radius + 2 * math.sin(self.t * 2)
+
+    def draw(self, surf):
+        if self.collected:
+            return
+        r = int(self.radius)
+        glow_surf = pygame.Surface((r * 4, r * 4), pygame.SRCALPHA)
+        for i in range(r * 2, 0, -2):
+            alpha = max(0, 120 - i * 3)
+            c = (*self.color[:3], alpha)
+            pygame.draw.circle(glow_surf, c, (r * 2, r * 2), i)
+        surf.blit(glow_surf, (int(self.x - r * 2), int(self.y - r * 2)))
+
+        c = (min(255, self.color[0]),
+             min(255, self.color[1]),
+             min(255, self.color[2]))
+        pygame.draw.circle(surf, c, (int(self.x), int(self.y)), r)
+        pygame.draw.circle(surf, WHITE, (int(self.x), int(self.y)), r - 2)
+        inner_c = (min(255, int(self.color[0] * 1.3)),
+                  min(255, int(self.color[1] * 1.3)),
+                  min(255, int(self.color[2] * 1.3)))
+        pygame.draw.circle(surf, inner_c, (int(self.x), int(self.y)), r - 4)
+
+        highlight = (int(self.x - r * 0.3), int(self.y - r * 0.3))
+        pygame.draw.circle(surf, (255, 255, 255, 180), highlight, r // 3)
+
+class Enemy:
+    def __init__(self, x, y, w, h, level=1):
+        self.rect = pygame.Rect(x, y, w, h)
+        self.start_x = x
+        self.start_y = y
+        self.w = w
+        self.h = h
+        self.speed = 1.0 + level * 0.3
+        self.dir = 1
+        self.move_range = random.randint(80, 160)
+        self.t = random.uniform(0, 100)
+        self.color = RED_GLOW
+        self.alive = True
+        self.move_type = random.choice(['horizontal', 'vertical', 'patrol'])
+
+    def update(self, platforms):
+        self.t += 0.03
+        if not self.alive:
+            return
+
+        if self.move_type == 'horizontal':
+            self.rect.x += self.speed * self.dir
+            if abs(self.rect.x - self.start_x) > self.move_range:
+                self.dir *= -1
+        elif self.move_type == 'vertical':
+            self.rect.y += self.speed * self.dir
+            if abs(self.rect.y - self.start_y) > self.move_range:
+                self.dir *= -1
+        elif self.move_type == 'patrol':
+            self.rect.x += self.speed * self.dir
+            self.rect.y += 0.3 * math.sin(self.t * 2)
+            if abs(self.rect.x - self.start_x) > self.move_range:
+                self.dir *= -1
+
+    def draw(self, surf):
+        if not self.alive:
+            return
+        r = self.rect
+        glow_surf = pygame.Surface((r.w + 16, r.h + 16), pygame.SRCALPHA)
+        for i in range(8, 0, -1):
+            alpha = max(0, 80 - i * 8)
+            c = (*self.color[:3], alpha)
+            size_i = r.w + i * 2
+            if size_i > 0:
+                pygame.draw.ellipse(glow_surf, c,
+                                   (8 - i, 8 - i, r.w + i * 2, r.h + i * 2))
+        surf.blit(glow_surf, (r.x - 8, r.y - 8))
+
+        body_color = (min(255, self.color[0]),
+                     min(255, self.color[1] + 20),
+                     min(255, self.color[2] + 20))
+        pygame.draw.ellipse(surf, body_color, r)
+
+        eye_color = (255, 255, 200)
+        pygame.draw.circle(surf, eye_color, (r.x + r.w // 3, r.y + r.h // 3), 4)
+        pygame.draw.circle(surf, eye_color, (r.x + 2 * r.w // 3, r.y + r.h // 3), 4)
+        pygame.draw.circle(surf, (255, 0, 0), (r.x + r.w // 3, r.y + r.h // 3), 2)
+        pygame.draw.circle(surf, (255, 0, 0), (r.x + 2 * r.w // 3, r.y + r.h // 3), 2)
+
+    def check_collision(self, player_rect):
+        if not self.alive:
+            return False
+        return self.rect.colliderect(player_rect)
+
+def create_level(level_num):
+    num_platforms = 7 + level_num * 2
+    num_orbs = 4 + level_num * 2
+    num_enemies = max(1, level_num)
+
+    platforms = []
+    orbs = []
+    enemies = []
+
+    platform_colors = [NEON_CYAN, NEON_MAGENTA, NEON_GREEN, NEON_ORANGE, NEON_PINK, PURPLE]
+
+    ground = Platform(0, HEIGHT - 30, WIDTH, 30, (40, 40, 80))
+    platforms.append(ground)
+
+    for _ in range(num_platforms):
+        p_w = random.randint(70, 140)
+        p_h = 18
+        p_x = random.randint(20, WIDTH - p_w - 20)
+        p_y = random.randint(60, HEIGHT - 100)
+        if p_y > HEIGHT - 150:
+            p_y = HEIGHT - 150
+        color = random.choice(platform_colors)
+        plat = Platform(p_x, p_y, p_w, p_h, color)
+        platforms.append(plat)
+
+    available_positions = [(p.rect.centerx, p.rect.centery - 25) for p in platforms[1:]]
+    random.shuffle(available_positions)
+    for i in range(min(num_orbs, len(available_positions))):
+        ox, oy = available_positions[i]
+        orb = Orb(ox, oy)
+        orbs.append(orb)
+
+    enemy_positions = [(p.rect.x + 10, p.rect.y - 30, 30, 20) for p in platforms[1:] if p.rect.y > 100]
+    random.shuffle(enemy_positions)
+    for i in range(min(num_enemies, len(enemy_positions))):
+        ex, ey, ew, eh = enemy_positions[i]
+        enemy = Enemy(ex, ey, ew, eh, level_num)
+        enemies.append(enemy)
+
+    return platforms, orbs, enemies
+
+def draw_text(surf, text, font, color, x, y, center=True):
+    text_surf = font.render(text, True, color)
+    text_rect = text_surf.get_rect()
+    if center:
+        text_rect.center = (x, y)
+    else:
+        text_rect.topleft = (x, y)
+    surf.blit(text_surf, text_rect)
+
+def draw_gradient_bg(surf, color_top, color_bot):
+    for i in range(HEIGHT):
+        r = color_top[0] + (color_bot[0] - color_top[0]) * i // HEIGHT
+        g = color_top[1] + (color_bot[1] - color_top[1]) * i // HEIGHT
+        b = color_top[2] + (color_bot[2] - color_top[2]) * i // HEIGHT
+        pygame.draw.line(surf, (r, g, b), (0, i), (WIDTH, i))
+
+def main():
+    running = True
+    state = "MENU"
+    level = 1
+    score = 0
+    lives = MAX_LIVES
+    player = Player(WIDTH // 2 - 14, HEIGHT - 80)
+    platforms, orbs, enemies = create_level(level)
+    stars = [Star() for _ in range(80)]
+    particles = []
+    level_timer = 0
+    combo = 0
+    high

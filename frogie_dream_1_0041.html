@@ -1,0 +1,222 @@
+import pygame
+import sys
+import random
+
+# Initialize Pygame
+pygame.init()
+
+# Constants
+SCREEN_WIDTH = 800
+SCREEN_HEIGHT = 600
+FPS = 60
+
+# Colors
+BLACK = (0, 0, 0)
+WHITE = (255, 255, 255)
+GREEN = (0, 200, 0)
+DARK_GREEN = (0, 150, 0)
+YELLOW = (255, 255, 0)
+RED = (255, 0, 0)
+BLUE = (0, 100, 255)
+PURPLE = (150, 0, 200)
+ORANGE = (255, 165, 0)
+CYAN = (0, 255, 255)
+GRAY = (128, 128, 128)
+
+# Set display
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+pygame.display.set_caption("Frogie's Dream: Mnemosyne Synapse")
+clock = pygame.time.Clock()
+
+# Fonts
+font_small = pygame.font.Font(None, 36)
+font_large = pygame.font.Font(None, 72)
+
+# Game variables
+frog_width = 60
+frog_height = 40
+frog_x = SCREEN_WIDTH // 2 - frog_width // 2
+frog_y = SCREEN_HEIGHT - 100
+frog_speed = 8  # not used when following mouse
+
+spore_list = []
+glitch_list = []
+
+score = 0
+health = 3
+level = 1
+max_level = 10
+score_to_level_up = 10  # increase level every 10 points
+
+spawn_timer = 0
+spawn_delay = 30  # frames between spawns
+spore_speed = 3
+glitch_speed = 4
+glitch_chance = 0.3  # 30% chance of spawning a glitch
+
+game_over = False
+restart = False
+
+# Helper functions
+def draw_frog(x, y):
+    # Body
+    pygame.draw.ellipse(screen, GREEN, (x, y, frog_width, frog_height))
+    # Eyes
+    eye_offset_x = 10
+    eye_offset_y = -5
+    eye_radius = 8
+    pygame.draw.circle(screen, WHITE, (x + eye_offset_x, y + eye_offset_y), eye_radius)
+    pygame.draw.circle(screen, WHITE, (x + frog_width - eye_offset_x, y + eye_offset_y), eye_radius)
+    pygame.draw.circle(screen, BLACK, (x + eye_offset_x, y + eye_offset_y), 4)
+    pygame.draw.circle(screen, BLACK, (x + frog_width - eye_offset_x, y + eye_offset_y), 4)
+    # Mouth
+    pygame.draw.arc(screen, DARK_GREEN, (x + 10, y + 10, 40, 20), 0, 3.14, 2)
+
+def draw_spore(x, y, radius=10):
+    pygame.draw.circle(screen, YELLOW, (x, y), radius)
+    pygame.draw.circle(screen, ORANGE, (x, y), radius, 2)
+
+def draw_glitch(x, y, radius=12):
+    pygame.draw.circle(screen, RED, (x, y), radius)
+    pygame.draw.circle(screen, PURPLE, (x, y), radius, 3)
+
+def reset_game():
+    global score, health, level, spore_list, glitch_list, game_over, restart, spawn_timer, spore_speed, glitch_speed
+    score = 0
+    health = 3
+    level = 1
+    spore_list = []
+    glitch_list = []
+    game_over = False
+    restart = False
+    spawn_timer = 0
+    spore_speed = 3
+    glitch_speed = 4
+
+def spawn_entity():
+    global spawn_timer
+    if spawn_timer <= 0:
+        x = random.randint(50, SCREEN_WIDTH - 50)
+        if random.random() < glitch_chance:
+            glitch_list.append({'x': x, 'y': -20, 'speed': glitch_speed})
+        else:
+            spore_list.append({'x': x, 'y': -20, 'speed': spore_speed})
+        spawn_timer = spawn_delay
+    else:
+        spawn_timer -= 1
+
+def update_entities():
+    global score, health, game_over
+    # Update spores
+    for spore in spore_list[:]:
+        spore['y'] += spore['speed']
+        # Check collision with frog
+        if (frog_x < spore['x'] < frog_x + frog_width and
+            frog_y < spore['y'] < frog_y + frog_height):
+            score += 1
+            spore_list.remove(spore)
+        elif spore['y'] > SCREEN_HEIGHT + 20:
+            spore_list.remove(spore)
+
+    # Update glitches
+    for glitch in glitch_list[:]:
+        glitch['y'] += glitch['speed']
+        if (frog_x < glitch['x'] < frog_x + frog_width and
+            frog_y < glitch['y'] < frog_y + frog_height):
+            health -= 1
+            glitch_list.remove(glitch)
+            if health <= 0:
+                game_over = True
+        elif glitch['y'] > SCREEN_HEIGHT + 20:
+            glitch_list.remove(glitch)
+
+    # Level up check
+    if score > 0 and score % score_to_level_up == 0 and level < max_level:
+        level += 1
+        spore_speed += 0.5
+        glitch_speed += 0.5
+        global spawn_delay
+        spawn_delay = max(10, spawn_delay - 2)
+
+def draw_hud():
+    score_text = font_small.render(f"Score: {score}", True, WHITE)
+    health_text = font_small.render(f"Health: {health}", True, WHITE)
+    level_text = font_small.render(f"Level: {level}", True, WHITE)
+    screen.blit(score_text, (10, 10))
+    screen.blit(health_text, (10, 50))
+    screen.blit(level_text, (10, 90))
+
+def game_over_screen():
+    screen.fill(BLACK)
+    title = font_large.render("Game Over", True, RED)
+    score_display = font_small.render(f"Final Score: {score}", True, WHITE)
+    level_display = font_small.render(f"Reached Level: {level}", True, WHITE)
+    restart_msg = font_small.render("Click or press SPACE to restart", True, WHITE)
+    screen.blit(title, (SCREEN_WIDTH//2 - title.get_width()//2, SCREEN_HEIGHT//2 - 100))
+    screen.blit(score_display, (SCREEN_WIDTH//2 - score_display.get_width()//2, SCREEN_HEIGHT//2 - 30))
+    screen.blit(level_display, (SCREEN_WIDTH//2 - level_display.get_width()//2, SCREEN_HEIGHT//2 + 10))
+    screen.blit(restart_msg, (SCREEN_WIDTH//2 - restart_msg.get_width()//2, SCREEN_HEIGHT//2 + 60))
+
+def draw_background():
+    # Simple gradient background (dark to deep purple)
+    for i in range(SCREEN_HEIGHT):
+        color = (
+            max(0, 10 - i // 20),
+            max(0, 5 - i // 30),
+            min(255, 50 + i // 2)
+        )
+        pygame.draw.line(screen, color, (0, i), (SCREEN_WIDTH, i))
+
+# Main game loop
+running = True
+while running:
+    # Handle events
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                running = False
+            if game_over and event.key == pygame.K_SPACE:
+                reset_game()
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if game_over:
+                reset_game()
+
+    # If game over, show screen and skip updates
+    if game_over:
+        draw_background()
+        game_over_screen()
+        pygame.display.flip()
+        clock.tick(FPS)
+        continue
+
+    # Get mouse position for frog movement (touch control)
+    mouse_x, mouse_y = pygame.mouse.get_pos()
+    frog_x = mouse_x - frog_width // 2
+    # Keep frog within screen bounds
+    if frog_x < 0:
+        frog_x = 0
+    elif frog_x > SCREEN_WIDTH - frog_width:
+        frog_x = SCREEN_WIDTH - frog_width
+
+    # Spawn and update entities
+    spawn_entity()
+    update_entities()
+
+    # Drawing
+    draw_background()
+    draw_frog(frog_x, frog_y)
+
+    for spore in spore_list:
+        draw_spore(spore['x'], spore['y'])
+    for glitch in glitch_list:
+        draw_glitch(glitch['x'], glitch['y'])
+
+    draw_hud()
+
+    pygame.display.flip()
+    clock.tick(FPS)
+
+pygame.quit()
+sys.exit()

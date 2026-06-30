@@ -1,410 +1,266 @@
-We need to output a single HTML file containing everything: HTML, CSS, JS, possibly using <style> and <script>. No external libraries except fonts (maybe Google fonts). Must have a game called TRINI BRAWL with described features. Provide complete working code.
-
-We need to include touch events. Simple side-scrolling beat'em up with sprites using CSS (maybe using simple colored divs). We can simulate characters as colored blocks with limited animation.
-
-Simplify:
-
-- Player is a div with background image of pixel art using data URI? Could just use CSS to create simple shape.
-
-- Enemies similar.
-
-- We'll implement game loop using requestAnimationFrame.
-
-- Controls: left side of screen (left half) tap = move left (player moves left) and punching (maybe just attack). Right side tap = move right and punch. Center region (e.g., middle 25% width) for special move.
-
-- Health bars using divs.
-
-- Score increments per enemy defeated.
-
-- 3 waves: each wave spawns enemies with increasing speed and health. After wave 3, spawn boss with more health.
-
-- Game over screen with restart.
-
-- Victory screen.
-
-- Store button linking to ETH address.
-
-- Music vibe: Use CSS animation (like moving background) and maybe Web Audio to play some generated percussive beep.
-
-But we can also use Web Audio API to generate simple percussive tones for punch and special.
-
-Also a background with carnival colors.
-
-Let's code:
-
-HTML structure:
-
-<div id="game">
-  <canvas? Possibly easier with canvas. But requirement: pure HTML + CSS + JS only, we can use canvas for drawing pixel art. Let's use canvas for flexibility.
-
-But they said pixel art using CSS, but it's okay to use canvas.
-
-Simplify: Use canvas for rendering characters via rectangles.
-
-Will implement with canvas.
-
-Game logic: Entities with x, y, width, height, health, type (player/enemy/boss). Player controlled via touch or mouse.
-
-Input: For touch, listen touchstart, get coordinates, decide region.
-
-Define regions: screen width; left third = left action, right third = right action, middle third = special.
-
-Movement: Player can move left/right within bounds.
-
-Attacks: On tap left/right, register attack; if enemy within range (e.g., 50px in that direction), reduce enemy health.
-
-Special move: damages all enemies.
-
-Health bars: simple divs.
-
-Score: show.
-
-Shop button: <a href="https://etherscan.io/address/0xe38c9c51f57e2F636fEB9eF8371b84E829729424" target="_blank">Shop</a>
-
-Let's craft.
-
-Will also add audio: using Web Audio to play short beep for punch, and a longer tone for special.
-
-Implement main loop: update positions of enemies moving leftwards. When enemy reaches player x position, cause damage to player.
-
-Victory after boss defeated.
-
-Game over if player health <=0.
-
-Add start screen with "Tap to Start".
-
-Implement responsive size: use window.innerWidth, innerHeight.
-
-Ok.
-
-Now produce final HTML.
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <title>TRINI BRAWL</title>
 <style>
-    html,body{
-        margin:0; padding:0; overflow:hidden; height:100%; background:#000;
-        font-family: 'Press Start 2P', cursive;
-    }
-    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
-    #gameCanvas{
-        background: linear-gradient(to bottom, #b30000 0%, #ff6600 30%, #000 100%);
-        display:block;
-    }
-    #ui{
-        position:absolute; top:10px; left:10px; right:10px;
-        color:#fff; text-align:center; pointer-events:none;
-        font-size:14px;
-    }
-    .bar{
-        width:200px; height:15px; border:2px solid #fff; margin:5px auto;
-        background:#444;
-    }
-    .fill{
-        height:100%; background:#0f0;
-    }
-    #shopBtn{
-        position:absolute; bottom:10px; right:10px; padding:8px 12px;
-        background:#0a0; color:#fff; border:none; border-radius:5px;
-        font-size:12px; cursor:pointer; pointer-events:auto;
-    }
-    #overlay{
-        position:absolute; top:0; left:0; right:0; bottom:0;
-        background:rgba(0,0,0,0.8); color:#fff; display:flex;
-        align-items:center; justify-content:center; flex-direction:column;
-        font-size:24px; text-align:center; z-index:10;
-    }
-    #overlay button{
-        margin-top:20px; padding:10px 20px; font-size:18px;
-        background:#ff0; color:#000; border:none; cursor:pointer;
-    }
+    body{margin:0;overflow:hidden;background:#111;display:flex;justify-content:center;align-items:center;height:100vh;}
+    canvas{display:block;background:#222;}
+    #overlay{position:absolute;top:0;left=0;width:100%;height:100%;background:rgba(0,0,0,0.7);color:#fff;flex-direction:column;align-items:center;justify-content:center;display:none;font-family:Arial,sans-serif;z-index:10;}
+    #overlay button{margin-top:20px;padding:10px 20px;font-size:1.2rem;cursor:pointer;}
 </style>
 </head>
 <body>
 <canvas id="gameCanvas"></canvas>
-<div id="ui">
-    <div>Score: <span id="score">0</span></div>
-    <div class="bar"><div id="playerHealth" class="fill"></div></div>
-    <div class="bar"><div id="enemyHealth" class="fill" style="background:#f00;"></div></div>
-</div>
-<button id="shopBtn">Shop (ETH)</button>
 <div id="overlay">
-    <div id="msg">TRINI BRAWL</div>
-    <button id="startBtn">Tap to Start</button>
-</div>
-
-<script>
-(() => {
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
-    const scoreEl = document.getElementById('score');
-    const playerHealthBar = document.getElementById('playerHealth');
-    const enemyHealthBar = document.getElementById('enemyHealth');
-    const overlay = document.getElementById('overlay');
-    const msg = document.getElementById('msg');
-    const startBtn = document.getElementById('startBtn');
-    const shopBtn = document.getElementById('shopBtn');
-
-    // Resize canvas
-    function resize(){
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-    }
-    window.addEventListener('resize', resize);
-    resize();
-
-    // Audio setup
-    const audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-    function playTone(freq, dur, type='sine'){
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = type;
-        osc.frequency.value = freq;
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start();
-        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime+dur);
-        osc.stop(audioCtx.currentTime+dur);
-    }
-    function punchSound(){ playTone(200,0.1,'square'); }
-    function specialSound(){ playTone(100,0.3,'triangle'); }
-
-    // Game variables
-    let gameState = 'menu'; // menu, playing, gameover, victory
-    let player, enemies, boss, wave, score, playerHealth, enemyHealth;
-    const playerSpeed = 4;
-    const enemySpeedBase = 1.5;
-    const maxWaves = 3;
-
-    function initGame(){
-        player = {x:50, y:canvas.height-120, w:50, h:100, health:100, dir:1};
-        enemies = [];
-        boss = null;
-        wave = 1;
-        score = 0;
-        playerHealth = 100;
-        enemyHealth = 0;
-        spawnWave();
-    }
-
-    function spawnWave(){
-        const count = wave*2+2;
-        for(let i=0;i<count;i++){
-            const e = {
-                x: canvas.width + i*120,
-                y: canvas.height-120,
-                w:50,
-                h:100,
-                health: wave*30,
-                maxHealth: wave*30,
-                speed: enemySpeedBase + wave*0.3,
-                type:'enemy'
-            };
-            enemies.push(e);
-        }
-        enemyHealth = 0; // No boss yet
-    }
-
-    function spawnBoss(){
-        boss = {
-            x: canvas.width,
-            y: canvas.height-150,
-            w:80,
-            h:150,
-            health: 300,
-            maxHealth:300,
-            speed: 2,
-            type:'boss'
-        };
-        enemyHealth = boss.health;
-    }
-
-    function update(){
-        // player health clamp
-        player.health = Math.max(0, player.health);
-        // move enemies
-        enemies.forEach(e=>{ e.x -= e.speed; });
-        // remove passed enemies
-        enemies = enemies.filter(e=>e.x+e.w>0);
-        // collision with player
-        enemies.forEach(e=>{
-            if (e.x < player.x+player.w && e.x+e.w > player.x &&
-                e.y < player.y+player.h && e.y+e.h > player.y){
-                player.health -= 0.2;
-                e.health -= 0.1;
-                if(e.health<=0) score+=10;
-            }
-        });
-        // boss actions
-        if(boss){
-            boss.x -= boss.speed;
-            if(boss.x < canvas.width/2) boss.x = canvas.width/2;
-            // collision with player
-            if (boss.x < player.x+player.w && boss.x+boss.w > player.x &&
-                boss.y < player.y+player.h && boss.y+boss.h > player.y){
-                player.health -= 0.3;
-            }
-        }
-
-        // Clean dead enemies
-        enemies = enemies.filter(e=>e.health>0);
-        // Update health bars
-        playerHealthBar.style.width = (player.health/100*100)+'%';
-        if(boss){
-            enemyHealthBar.style.width = (boss.health/boss.maxHealth*100)+'%';
-        } else if(enemies.length){
-            // Show average health of enemies
-            const avg = enemies.reduce((s,e)=>s+e.health,0)/enemies.length;
-            enemyHealthBar.style.width = (avg/ (wave*30) *100)+'%';
-        } else {
-            enemyHealthBar.style.width = '0%';
-        }
-
-        // Wave progression
-        if(enemies.length===0 && !boss){
-            if(wave<maxWaves){
-                wave++;
-                spawnWave();
-            } else {
-                spawnBoss();
-            }
-        }
-        // Boss defeated?
-        if(boss && boss.health<=0){
-            gameState='victory';
-            msg.innerHTML='VICTORY!<br>Score: '+score;
-            overlay.style.display='flex';
-        }
-        // Player dead?
-        if(player.health<=0){
-            gameState='gameover';
-            msg.innerHTML='GAME OVER<br>Score: '+score;
-            overlay.style.display='flex';
-        }
-    }
-
-    function draw(){
-        ctx.clearRect(0,0,canvas.width,canvas.height);
-        // Draw player
-        ctx.fillStyle='#0ff';
-        ctx.fillRect(player.x, player.y, player.w, player.h);
-        // Draw enemies
-        ctx.fillStyle='#f00';
-        enemies.forEach(e=>{ ctx.fillRect(e.x,e.y,e.w,e.h); });
-        // Draw boss
-        if(boss){
-            ctx.fillStyle='#ff0';
-            ctx.fillRect(boss.x,boss.y,boss.w,boss.h);
-        }
-    }
-
-    function loop(){
-        if(gameState==='playing'){
-            update();
-            draw();
-        }
-        requestAnimationFrame(loop);
-    }
-    requestAnimationFrame(loop);
-
-    // Controls
-    function handleTouch(x){
-        const w = canvas.width;
-        if(x< w*0.33){
-            // left side - move left & punch
-            player.x = Math.max(0, player.x - playerSpeed);
-            // punch
-            punchSound();
-            enemies.forEach(e=>{ if(e.x < player.x+player.w && e.x+e.w > player.x-player.w && Math.abs(e.y-player.y)<30) e.health-=20; });
-        }else if(x> w*0.66){
-            // right side - move right & punch
-            player.x = Math.min(w-player.w, player.x + playerSpeed);
-            punchSound();
-            enemies.forEach(e=>{ if(e.x < player.x+player.w*2 && e.x+e.w > player.x+player.w && Math.abs(e.y-player.y)<30) e.health-=20; });
-        }else{
-            // center - special
-            specialSound();
-            if(boss){
-                boss.health -= 50;
-            }else{
-                enemies.forEach(e=>e.health-=30);
-            }
-        }
-    }
-
-    canvas.addEventListener('touchstart',e=>{
-        e.preventDefault();
-        const touch = e.changedTouches[0];
-        handleTouch(touch.clientX);
-    });
-    canvas.addEventListener('mousedown',e=>{
-        handleTouch(e.clientX);
-    });
-
-    startBtn.addEventListener('click',()=>{
-        overlay.style.display='none';
-        gameState='playing';
-        initGame();
-    });
-
-    // Restart after game over/victory
-    overlay.addEventListener('click',e=>{
-        if(e.target.tagName==='BUTTON') return;
-        overlay.style.display='none';
-        gameState='playing';
-        initGame();
-    });
-
-    // Shop button
-    shopBtn.addEventListener('click',()=>{
-        window.open('https://etherscan.io/address/0xe38c9c51f57e2F636fEB9eF8371b84E829729424','_blank');
-    });
-})();
-</script>
-
-<!-- NOWPayments Integration -->
-<style>
-#np-btn{background:linear-gradient(135deg,#FFD700,#ff8c00);color:#000;border:none;padding:15px 30px;border-radius:30px;font-size:18px;font-weight:bold;cursor:pointer;width:100%;margin:10px 0;}
-#np-info{display:none;background:#111;border:2px solid #FFD700;border-radius:15px;padding:20px;margin:10px;text-align:center;}
-#np-addr{color:#FFD700;font-size:11px;word-break:break-all;margin:10px 0;}
-</style>
-<div style="position:fixed;bottom:60px;right:10px;z-index:999;width:200px">
-  <button id="np-btn" onclick="openPayment(5,'Frogie Game')">💳 Buy - $5</button>
-  <div id="np-info">
-    <p style="color:#00ff88;font-size:20px;font-weight:bold" id="np-amount"></p>
-    <p style="color:white;font-size:12px">Send ETH to:</p>
-    <p id="np-addr"></p>
-    <p style="color:#aaa;font-size:10px">Payment auto-confirms</p>
-  </div>
+    <div id="overlayText"></div>
+    <button id="overlayBtn">Tap to Start</button>
 </div>
 <script>
-async function openPayment(amount, desc) {
-  const btn = document.getElementById('np-btn');
-  const info = document.getElementById('np-info');
-  btn.textContent = '⏳ Loading...';
-  try {
-    const r = await fetch('https://api.nowpayments.io/v1/payment', {
-      method:'POST',
-      headers:{'x-api-key':'UVen1GHwVagjcHpjdk2hGpxF61/Msgft','Content-Type':'application/json'},
-      body:JSON.stringify({price_amount:amount,price_currency:'usd',pay_currency:'eth',order_description:desc})
-    });
-    const d = await r.json();
-    if(d.pay_address){
-      document.getElementById('np-amount').textContent = d.pay_amount + ' ETH';
-      document.getElementById('np-addr').textContent = d.pay_address;
-      info.style.display = 'block';
-      btn.textContent = '✅ Send payment above';
-    } else {
-      btn.textContent = '❌ Pay ETH direct: 0xe38c9c51f57e2F636f...';
-    }
-  } catch(e) {
-    btn.textContent = '❌ Pay ETH: 0xe38c9c51f57e2F636f...';
-  }
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+let audioCtx = null;
+let backgroundInterval = null;
+
+// ----- Audio -----
+function initAudio(){
+    if(audioCtx) return;
+    audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    startBackgroundBeat();
 }
-</script>
-</body>
-</html>
+function playPunch(){
+    if(!audioCtx) return;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type='square';
+    o.frequency.setValueAtTime(200,audioCtx.currentTime);
+    o.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.1);
+    g.gain.setValueAtTime(0,audioCtx.currentTime);
+    g.gain.linearRampToValueAtTime(0.5,audioCtx.currentTime+0.01);
+    g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.1);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime+0.2);
+}
+function playSpecial(){
+    if(!audioCtx) return;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type='sine';
+    o.frequency.setValueAtTime(200,audioCtx.currentTime);
+    o.exponentialRampToValueAtTime(800,audioCtx.currentTime+0.3);
+    g.gain.setValueAtTime(0,audioCtx.currentTime);
+    g.gain.linearRampToValueAtTime(0.4,audioCtx.currentTime+0.01);
+    g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.3);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime+0.4);
+}
+function playEnemyHit(){
+    if(!audioCtx) return;
+    const buffer = audioCtx.createBuffer(2, audioCtx.sampleRate*0.05, audioCtx.sampleRate);
+    const left = buffer.getChannelData(0);
+    const right = buffer.getChannelData(1);
+    for(let i=0;i<buffer.length;i++){
+        const noise = (Math.random()*2-1)*0.5;
+        left[i]=noise;
+        right[i]=noise;
+    }
+    const source = audioCtx.createBufferSource();
+    source.buffer = buffer;
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0, audioCtx.currentTime);
+    g.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime+0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime+0.05);
+    source.connect(g); g.connect(audioCtx.destination);
+    source.start(); source.stop(audioCtx.currentTime+0.06);
+}
+function playStageClear(){
+    if(!audioCtx) return;
+    const now = audioCtx.currentTime;
+    const notes = [261.63,329.63,392.00]; // C4 E4 G4
+    notes.forEach((freq,i)=>{
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type='sine';
+        o.frequency.setValueAtTime(freq, now+i*0.15);
+        g.gain.setValueAtTime(0, now+i*0.15);
+        g.gain.linearRampToValueAtTime(0.2, now+i*0.15+0.01);
+        g.gain.exponentialRampToValueAtTime(0.001, now+i*0.15+0.2);
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start(); o.stop(now+i*0.15+0.2);
+    });
+}
+function startBackgroundBeat(){
+    stopBackgroundBeat();
+    backgroundInterval = setInterval(()=>{
+        if(!audioCtx) return;
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type='sine';
+        o.frequency.value = 110;
+        g.gain.setValueAtTime(0, audioCtx.currentTime);
+        g.gain.linearRampToValueAtTime(0.2, audioCtx.currentTime+0.01);
+        g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime+0.2);
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start(); o.stop(audioCtx.currentTime+0.2);
+    },500);
+}
+function stopBackgroundBeat(){ if(backgroundInterval) clearInterval(backgroundInterval); }
+
+// ----- Game Objects -----
+class Player{
+    constructor(){this.w=60;this.h=80;this.x=canvas.width/2-this.w/2;this.y=canvas.height-this.h-20;this.maxHealth=100;this.health=this.maxHealth;this.color='#0f0';}
+    draw(){
+        ctx.fillStyle=this.color;
+        ctx.fillRect(this.x,this.y,this.w,this.h);
+        // feather
+        ctx.fillStyle='#ff0';
+        ctx.beginPath();
+        ctx.moveTo(this.x+this.w/2,this.y);
+        ctx.lineTo(this.x+this.w/2-10,this.y-20);
+        ctx.lineTo(this.x+this.w/2+10,this.y-20);
+        ctx.fill();
+    }
+}
+class Enemy{
+    constructor(stage,isBoss=false,isMiniBoss=false){
+        this.w = isBoss?120:isMiniBoss?100:60+Math.random()*40;
+        this.h = isBoss?150:isMiniBoss?130:80+Math.random()*40;
+        this.x = canvas.width+this.w;
+        this.y = canvas.height-this.h-20-Math.random()*100;
+        this.speed = 1+Math.random()*1.5;
+        if(isBoss) this.speed*=0.5;
+        this.health = isBoss?30:isMiniBoss?20:5+Math.floor(Math.random()*3);
+        this.maxHealth=this.health;
+        this.color = isBoss?'#ff0':isMiniBoss?'#ff8800':'#f00';
+        this.type = isBoss?'boss':isMiniBoss?'miniBoss':'enemy';
+    }
+    update(){this.x-=this.speed;}
+    draw(){
+        ctx.fillStyle=this.color;
+        ctx.fillRect(this.x,this.y,this.w,this.h);
+        // health bar
+        const bw=this.w,bh=5;
+        ctx.fillStyle='#000';
+        ctx.fillRect(this.x,this.y-bh-2,bw,bh);
+        ctx.fillStyle='#0f0';
+        ctx.fillRect(this.x,this.y-bh-2,bw*(this.health/this.maxHealth),bh);
+    }
+}
+
+// ----- Game State -----
+let player = new Player();
+let enemies = [];
+let stage = 1;
+let score = 0;
+let gameOver = false;
+let victory = false;
+let enemiesToSpawn = [];
+let lastSpawn = 0;
+const spawnInterval = 1200;
+
+// Stage colors and scroll speeds
+const stageColors = ['#222','#660066','#006600'];
+const stageScrollSpeeds = [1,2,1.5];
+let bgOffset = 0;
+
+// ----- Input -----
+function handleTouch(e){
+    initAudio();
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const touchX = e.touches[0].clientX - rect.left;
+    const third = canvas.width/3;
+    const hitLeft = touchX < third;
+    const hitRight = touchX > 2*third;
+    const hitSpecial = !hitLeft && !hitRight;
+    if(hitLeft) playerPunch('left');
+    else if(hitRight) playerPunch('right');
+    else if(hitSpecial) playerSpecial();
+}
+function handleMouse(e){
+    initAudio();
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const third = canvas.width/3;
+    const hitLeft = mx < third;
+    const hitRight = mx > 2*third;
+    const hitSpecial = !hitLeft && !hitRight;
+    if(e.type==='mousedown'){
+        if(hitLeft) playerPunch('left');
+        else if(hitRight) playerPunch('right');
+        else if(hitSpecial) playerSpecial();
+    }
+}
+canvas.addEventListener('touchstart',handleTouch,{passive:false});
+canvas.addEventListener('mousedown',handleMouse);
+
+// ----- Player Actions -----
+function playerPunch(side){
+    playPunch();
+    const reach = 80;
+    const bx = side==='left'?player.x-reach:player.x+player.w;
+    const by = player.y;
+    const bw = reach;
+    const bh = player.h;
+    enemies.forEach(en=>{
+        if(en.x < bx+bw && en.x+en.w > bx && en.y < by+bh && en.y+en.h > by){
+            en.health -= 20;
+            if(en.health<=0){ defeatEnemy(en); }
+            else{ playEnemyHit(); }
+        }
+    });
+}
+function playerSpecial(){
+    playSpecial();
+    const cx = player.x+player.w/2;
+    const cy = player.y+player.h/2;
+    const radius = 150;
+    enemies.forEach(en=>{
+        const dx = (en.x+en.w/2)-cx;
+        const dy = (en.y+en.h/2)-cy;
+        const dist = Math.sqrt(dx*dx+dy*dy);
+        if(dist<radius){
+            en.health -= 40;
+            if(en.health<=0){ defeatEnemy(en); }
+            else{ playEnemyHit(); }
+        }
+    });
+}
+function defeatEnemy(en){
+    const idx = enemies.indexOf(en);
+    if(idx>-1) enemies.splice(idx,1);
+    score += 10;
+    playEnemyHit();
+}
+
+// ----- Stage Management -----
+function startStage(){
+    enemiesToSpawn = [];
+    if(stage===1){
+        for(let i=0;i<5;i++) enemiesToSpawn.push(new Enemy(1));
+    }else if(stage===2){
+        for(let i=0;i<8;i++) enemiesToSpawn.push(new Enemy(2));
+        enemiesToSpawn.push(new Enemy(2,false,true)); // mini boss
+    }else if(stage===3){
+        for(let i=0;i<10;i++) enemiesToSpawn.push(new Enemy(3));
+        enemiesToSpawn.push(new Enemy(3,true,false)); // boss
+    }
+    lastSpawn = 0;
+    bgOffset = 0;
+}
+function spawnEnemy(){
+    if(enemiesToSpawn.length===0) return;
+    const now = performance.now();
+    if(now-lastSpawn<spawnInterval) return;
+    enemies.push(enemiesToSpawn.shift());
+    lastSpawn = now;
+}
+
+// ----- Update & Render -----
+function update(){
+    if(gameOver||victory) return;
+    spawnEnemy();
+    enemies.forEach(en=>en.update());
+    // remove off-screen
+    enemies = enemies.filter(en=>en.x+en.w>-20);
